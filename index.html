@@ -887,8 +887,8 @@ function filterByTrack(trackName) {
   }
   updateTrackFilters();
   collapseTrackFilter();
-  if(currentView !== 'timeline' && currentView !== 'map') switchView('timeline');
-  else if(currentView === 'timeline') renderTimeline();
+  if(currentView === 'timeline') renderTimeline();
+  else switchView('timeline');
 }
 
 function clearTracks() {
@@ -896,6 +896,7 @@ function clearTracks() {
   updateTrackFilters();
   collapseTrackFilter();
   if(currentView === 'timeline') renderTimeline();
+  else switchView('timeline');
 }
 
 // ===== VIEW SWITCHING =====
@@ -1363,6 +1364,7 @@ function init() {
       pill.classList.add('active');
       currentDateFilter = pill.dataset.date;
       if(currentView === 'timeline') renderTimeline();
+      else switchView('timeline');
     });
   });
 
