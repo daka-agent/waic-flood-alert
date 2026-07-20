@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAIC 暴雨应急护航 · Rain Alert for WAIC 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script defer src="https://events.vercount.one/js"></script>
+<style>
+:root{
+  --bg-deep:#060912; --bg-base:#0a0e1a; --bg-card:rgba(15,22,38,0.7);
+  --border-glow:rgba(0,240,255,0.15); --text-primary:#e8eef7; --text-secondary:#8b95a8;
+  --accent-cyan:#00f0ff; --accent-purple:#a855f7; --accent-pink:#ec4899;
+  /* 暴雨警示色系（新增，不修改原有变量） */
+  --warn-blue:#3b82f6; --warn-yellow:#facc15; --warn-orange:#fb923c; --warn-red:#ef4444; --warn-safe:#4ade80;
+}
+*{box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-deep);color:var(--text-primary);margin:0;overflow-x:hidden}
+.font-orbitron{font-family:'Orbitron',sans-serif}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:rgba(255,255,255,0.03)}
+::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,240,255,0.4)}
+
+/* Background effects */
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(0,240,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,0.02) 1px,transparent 1px);background-size:50px 50px;pointer-events:none;z-index:0}
+.bg-glow-1{position:fixed;top:-200px;left:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(0,240,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;animation:float1 20s ease-in-out infinite}
+.bg-glow-2{position:fixed;bottom:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(168,85,247,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;animation:float2 25s ease-in-out infinite}
+@keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(100px,50px)}}
+@keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-80px,-60px)}}
+
+/* Glass card */
+.glass{background:var(--bg-card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);border-radius:16px}
+.glass-hover{transition:all .3s cubic-bezier(.4,0,.2,1)}
+.glass-hover:hover{border-color:var(--border-glow);box-shadow:0 0 30px rgba(0,240,255,0.08);transform:translateY(-2px)}
+
+/* Neon text */
+.neon-cyan{color:var(--accent-cyan);text-shadow:0 0 20px rgba(0,240,255,0.4)}
+.neon-purple{color:var(--accent-purple);text-shadow:0 0 20px rgba(168,85,247,0.4)}
+
+/* Track badge */
+.track-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:500;white-space:nowrap}
+
+/* Event card */
+.event-card{position:relative;overflow:hidden;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1)}
+.event-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px}
+.event-card:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+
+/* Filter pills */
+.filter-pill{padding:6px 16px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;transition:all .25s;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--text-secondary);white-space:nowrap}
+.filter-pill:hover{border-color:rgba(0,240,255,0.3);color:var(--text-primary)}
+.filter-pill.active{background:rgba(0,240,255,0.12);border-color:rgba(0,240,255,0.4);color:var(--accent-cyan);box-shadow:0 0 15px rgba(0,240,255,0.15)}
+
+/* Track chip */
+.track-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;transition:all .25s;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:var(--text-secondary);white-space:nowrap}
+.track-chip:hover{color:var(--text-primary);transform:translateY(-1px)}
+.track-chip.active{color:var(--text-primary);border-color:var(--chip-color);background:color-mix(in srgb,var(--chip-color) 12%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--chip-color) 20%,transparent)}
+.track-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Track filter toggle (mobile collapsible) */
+.track-toggle{display:none}
+.track-filter-body{overflow:visible;max-height:none;opacity:1;transition:max-height .3s ease,opacity .25s ease}
+
+/* View transitions */
+.view-section{display:none}
+.view-section.active{display:block;animation:fadeIn .4s ease}
+.view-section.no-anim{animation:none!important}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.active{display:flex;animation:fadeIn .2s ease}
+.modal-content{max-width:560px;width:100%;max-height:85vh;overflow-y:auto;animation:modalSlide .3s cubic-bezier(.4,0,.2,1)}
+@keyframes modalSlide{from{opacity:0;transform:scale(0.95) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+/* Map */
+#mapView{height:calc(100vh - 200px);min-height:450px;border-radius:16px;overflow:hidden;z-index:1}
+.leaflet-popup-content-wrapper{background:rgba(10,14,26,0.95)!important;backdrop-filter:blur(20px);border:1px solid rgba(0,240,255,0.2)!important;border-radius:12px!important;color:#e8eef7!important;box-shadow:0 8px 32px rgba(0,0,0,0.4)!important}
+.leaflet-popup-tip{background:rgba(10,14,26,0.95)!important;border:1px solid rgba(0,240,255,0.2)!important}
+.leaflet-container{background:#0a0e1a!important}
+.leaflet-tile{opacity:0;transition:opacity .25s ease-in;filter:invert(1) hue-rotate(180deg) brightness(0.55) contrast(1.1) saturate(0.6)!important}
+.leaflet-tile-loaded{opacity:1}
+.custom-pin{background:transparent;border:none}
+.pin-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.3);transition:all .3s}
+.pin-icon:hover{transform:rotate(-45deg) scale(1.2);z-index:1000}
+.pin-text{transform:rotate(45deg);font-size:13px;font-weight:700;color:#fff}
+.venue-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:600;color:#e8eef7;background:rgba(10,14,26,0.85);padding:2px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);pointer-events:none;backdrop-filter:blur(4px)}
+
+/* Visitor counter */
+.counter-widget{border-color:rgba(0,240,255,0.1)!important;transition:all .3s ease}
+.counter-widget:hover{border-color:rgba(0,240,255,0.25)!important;box-shadow:0 0 30px rgba(0,240,255,0.08)}
+#vercount_value_site_pv,#vercount_value_site_uv{transition:opacity .3s ease}
+
+/* Timeline */
+.timeline-container{position:relative}
+.timeline-line{position:absolute;left:70px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,transparent,rgba(0,240,255,0.15),rgba(0,240,255,0.15),transparent)}
+.time-marker{position:absolute;left:0;width:60px;text-align:right;font-size:11px;color:var(--text-secondary);font-family:'Orbitron',monospace}
+
+/* Stat card */
+.stat-card{position:relative;overflow:hidden}
+.stat-card::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.03),transparent);transition:left .6s}
+.stat-card:hover::after{left:100%}
+
+/* Search input */
+.search-input{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 16px 10px 42px;color:var(--text-primary);width:100%;font-size:14px;transition:all .25s}
+.search-input:focus{outline:none;border-color:rgba(0,240,255,0.4);box-shadow:0 0 20px rgba(0,240,255,0.08)}
+.search-input::placeholder{color:var(--text-secondary)}
+
+/* Favorite star */
+.fav-btn{transition:all .2s;cursor:pointer}
+.fav-btn:hover{transform:scale(1.2)}
+.fav-active{color:#fbbf24;text-shadow:0 0 10px rgba(251,191,36,0.5)}
+
+/* Nav button */
+.nav-btn{padding:8px 20px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;transition:all .25s;color:var(--text-secondary);border:1px solid transparent;white-space:nowrap}
+
+/* Mobile responsive */
+@media(max-width:768px){
+  .hero-stats{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .hero-stats .stat-card{padding:10px 6px!important}
+  .hero-stats .font-orbitron{font-size:1.5rem!important}
+  .hero-stats .text-xs{font-size:10px!important}
+  h1.font-orbitron{font-size:2.5rem!important;letter-spacing:1px!important}
+  .text-lg{font-size:1rem!important}
+  .text-xs.tracking-wider{font-size:9px!important;letter-spacing:1px!important}
+  /* Nav: wrap with full-width sections */
+  .nav-bar{flex-wrap:wrap!important;gap:6px!important}
+  .nav-bar > .flex.items-center:first-child{width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .nav-bar > .flex.items-center:first-child::-webkit-scrollbar{display:none}
+  .nav-btn{padding:7px 14px;font-size:13px;flex-shrink:0}
+  /* Search full width on its own line */
+  .nav-bar > .relative{min-width:100%!important;max-width:100%!important;width:100%!important}
+  .search-input{padding:9px 14px 9px 38px;font-size:13px}
+  /* Date filters scrollable */
+  .nav-bar > .flex.items-center:last-child{width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .nav-bar > .flex.items-center:last-child::-webkit-scrollbar{display:none}
+  .filter-pill{padding:5px 12px;font-size:12px;flex-shrink:0}
+  /* Track filters: collapsible on mobile */
+  .track-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--text-primary);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;gap:8px}
+  .track-toggle:active{background:rgba(0,240,255,0.06)}
+  .track-toggle-label{flex-shrink:0}
+  .track-toggle-status{flex:1;text-align:right;font-size:12px;font-weight:400;color:var(--accent-cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .track-toggle-chevron{width:16px;height:16px;flex-shrink:0;transition:transform .3s ease;color:var(--text-secondary)}
+  .track-toggle.expanded .track-toggle-chevron{transform:rotate(180deg)}
+  .track-filter-body{max-height:0;opacity:0;overflow:hidden;transition:max-height .35s ease,opacity .2s ease,margin-top .2s ease;margin-top:0}
+  .track-filter-body.expanded{max-height:500px;opacity:1;margin-top:8px}
+  #trackFilters{flex-wrap:wrap!important;gap:6px!important}
+  .track-chip{flex-shrink:0;padding:5px 10px;font-size:11px}
+  /* Timeline adjustments */
+  .timeline-line{left:50px}
+  .time-marker{width:42px;font-size:10px}
+  /* Map: fixed pixel height for mobile to prevent vh resize issues */
+  #mapView{height:500px!important;min-height:500px!important;border-radius:12px}
+  /* Modal: full screen on mobile */
+  .modal-overlay{padding:0!important;align-items:flex-end!important}
+  .modal-content{max-width:100%!important;max-height:90vh!important;border-radius:20px 20px 0 0!important;animation:modalSlideUp .35s cubic-bezier(.4,0,.2,1)}
+  @keyframes modalSlideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+  /* Track cards: single column */
+  #tracksContent{grid-template-columns:1fr!important}
+  /* Event detail grid: single column */
+  .modal-content .grid-cols-2{grid-template-columns:1fr!important}
+  /* Section padding */
+  main{padding:12px 12px!important}
+  section.relative{padding:16px 12px 8px!important}
+  nav.sticky{padding:8px 12px!important}
+  /* Section titles */
+  section h2{font-size:1.05rem!important}
+  /* Venue label on map */
+  .venue-label{font-size:10px!important;padding:2px 6px!important}
+  /* Counter: compact on mobile */
+  .counter-widget{gap:12px!important;padding:8px 16px!important}
+}
+@media(max-width:380px){
+  .hero-stats .font-orbitron{font-size:1.25rem!important}
+  .nav-btn{padding:6px 10px;font-size:12px}
+}
+
+/* ===== 暴雨应急：预警横幅 ===== */
+.warning-banner{position:sticky;top:0;z-index:100;padding:12px 20px;text-align:center;font-weight:600;font-size:14px;transition:all .3s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);cursor:pointer}
+.warning-banner.safe{background:rgba(74,222,128,0.12);border-bottom:1px solid rgba(74,222,128,0.3);color:#4ade80}
+.warning-banner.yellow{background:rgba(250,204,21,0.15);border-bottom:1px solid rgba(250,204,21,0.4);color:#facc15}
+.warning-banner.orange{background:rgba(251,146,60,0.18);border-bottom:1px solid rgba(251,146,60,0.5);color:#fb923c;animation:pulseWarn 2s ease-in-out infinite}
+.warning-banner.red{background:rgba(239,68,68,0.2);border-bottom:1px solid rgba(239,68,68,0.6);color:#ef4444;animation:pulseWarn 1.2s ease-in-out infinite}
+.warning-banner.loading{background:rgba(0,240,255,0.08);border-bottom:1px solid rgba(0,240,255,0.2);color:var(--accent-cyan)}
+@keyframes pulseWarn{0%,100%{box-shadow:inset 0 0 0 rgba(239,68,68,0)}50%{box-shadow:inset 0 0 40px rgba(239,68,68,0.25)}}
+.warning-banner .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;animation:blink 1.5s ease-in-out infinite;vertical-align:middle;margin-right:8px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.warning-banner-text{display:inline-flex;align-items:center}
+.warning-banner-detail{font-size:12px;font-weight:400;opacity:0.85;margin-top:4px;line-height:1.4;max-width:680px;margin-left:auto;margin-right:auto}
+
+/* ===== 上报 FAB 按钮 ===== */
+.fab-btn{position:fixed;right:20px;bottom:24px;z-index:90;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#fb923c);border:none;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(239,68,68,0.4);display:flex;align-items:center;justify-content:center;transition:transform .3s;animation:fabPulse 2.5s ease-in-out infinite}
+.fab-btn:hover{transform:scale(1.1)}
+.fab-btn:active{transform:scale(0.95)}
+@keyframes fabPulse{0%,100%{box-shadow:0 6px 20px rgba(239,68,68,0.4)}50%{box-shadow:0 6px 28px rgba(239,68,68,0.6)}}
+
+/* ===== 积水图钉 ===== */
+.waterlogging-pin{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid rgba(255,255,255,0.5);box-shadow:0 2px 8px rgba(0,0,0,0.5)}
+.waterlogging-pin.heavy{background:#ef4444;animation:pinPulse 1s ease-in-out infinite}
+.waterlogging-pin.medium{background:#fb923c;animation:pinPulse 1.8s ease-in-out infinite}
+.waterlogging-pin.light{background:#facc15}
+@keyframes pinPulse{0%,100%{box-shadow:0 2px 8px rgba(0,0,0,0.5),0 0 0 0 rgba(239,68,68,0.5)}50%{box-shadow:0 2px 8px rgba(0,0,0,0.5),0 0 0 12px rgba(239,68,68,0)}}
+.waterlogging-pin-text{transform:rotate(45deg);font-size:13px;font-weight:700;color:#fff}
+
+/* ===== 议程应急联动卡片 ===== */
+.agenda-alert{background:var(--bg-card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(0,240,255,0.12);border-radius:16px;padding:16px;margin-bottom:16px;position:relative;overflow:hidden}
+.agenda-alert::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(to bottom,#00f0ff,#a855f7)}
+.agenda-alert.warn::before{background:linear-gradient(to bottom,#fb923c,#ef4444)}
+.agenda-alert-title{font-size:11px;color:var(--text-secondary);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+.agenda-alert-event{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.4}
+.agenda-alert-time{font-size:13px;color:var(--accent-cyan);font-family:'Orbitron',monospace;margin-bottom:8px}
+.agenda-alert-suggestion{font-size:13px;color:#fbbf24;background:rgba(251,191,36,0.08);padding:8px 12px;border-radius:8px;border-left:3px solid #fbbf24;line-height:1.5}
+
+/* ===== 上报表单 ===== */
+.report-field{margin-bottom:14px}
+.report-label{display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;font-weight:500}
+.report-input,.report-textarea{width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;color:var(--text-primary);font-size:14px;font-family:inherit;transition:all .2s}
+.report-input:focus,.report-textarea:focus{outline:none;border-color:rgba(239,68,68,0.4);box-shadow:0 0 0 3px rgba(239,68,68,0.1)}
+.report-textarea{resize:vertical;min-height:60px}
+.severity-options{display:flex;gap:8px}
+.severity-option{flex:1;padding:10px;border-radius:10px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);text-align:center;cursor:pointer;transition:all .2s;font-size:13px;color:var(--text-secondary)}
+.severity-option.active.light{border-color:#facc15;background:rgba(250,204,21,0.12);color:#facc15}
+.severity-option.active.medium{border-color:#fb923c;background:rgba(251,146,60,0.12);color:#fb923c}
+.severity-option.active.heavy{border-color:#ef4444;background:rgba(239,68,68,0.12);color:#ef4444}
+.report-submit{width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#fb923c);color:#fff;border:none;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;margin-top:8px}
+.report-submit:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(239,68,68,0.35)}
+.report-submit:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+.report-photo-preview{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px}
+.location-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;border-radius:10px;border:1px dashed rgba(0,240,255,0.3);background:rgba(0,240,255,0.04);color:var(--accent-cyan);cursor:pointer;font-size:13px;transition:all .2s}
+.location-btn:hover{background:rgba(0,240,255,0.08);border-color:rgba(0,240,255,0.5)}
+
+/* ===== 通知开启按钮 ===== */
+.notify-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:999px;background:rgba(0,240,255,0.1);border:1px solid rgba(0,240,255,0.3);color:var(--accent-cyan);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.notify-btn:hover{background:rgba(0,240,255,0.18);box-shadow:0 0 20px rgba(0,240,255,0.15)}
+.notify-btn.granted{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.4);color:#4ade80}
+
+/* ===== 积水列表项 ===== */
+.waterlogging-item{display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg-card);border-radius:12px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;transition:all .2s}
+.waterlogging-item:hover{border-color:rgba(239,68,68,0.2);transform:translateX(4px)}
+.wl-severity-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.wl-severity-dot.heavy{background:#ef4444;box-shadow:0 0 8px #ef444480}
+.wl-severity-dot.medium{background:#fb923c;box-shadow:0 0 8px #fb923c80}
+.wl-severity-dot.light{background:#facc15;box-shadow:0 0 8px #facc1580}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow-1"></div>
+<div class="bg-glow-2"></div>
+
+<!-- 预警横幅 -->
+<div id="warningBanner" class="warning-banner loading">
+  <span class="dot"></span><span class="warning-banner-text">正在获取预警信息…</span>
+</div>
+
+<!-- Hero Section -->
+<section class="relative z-10 px-6 pt-10 pb-6 text-center">
+  <div class="inline-block mb-2 px-4 py-1 rounded-full glass" style="border-color:rgba(0,240,255,0.2)">
+    <span class="text-xs font-medium tracking-wider" style="color:var(--accent-cyan)">2026 WORLD ARTIFICIAL INTELLIGENCE CONFERENCE</span>
+  </div>
+  <h1 class="font-orbitron text-5xl md:text-6xl font-black mb-2" style="background:linear-gradient(135deg,#00f0ff 0%,#a855f7 50%,#ec4899 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:2px">暴雨应急护航</h1>
+  <p class="text-lg mb-1" style="color:var(--text-primary)">WAIC 2026 · 参会者暴雨应急工具</p>
+  <p class="text-sm mb-4" style="color:var(--text-secondary)">7月17日 - 7月20日 · 上海</p>
+  <div class="mb-6">
+    <button class="notify-btn" id="notifyBtn" onclick="requestNotificationPermission()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      <span id="notifyBtnText">开启暴雨通知</span>
+    </button>
+  </div>
+
+  <div class="hero-stats grid grid-cols-4 gap-4 max-w-3xl mx-auto">
+    <div class="stat-card glass glass-hover p-4 text-center">
+      <div class="font-orbitron text-3xl font-bold neon-cyan" id="statTotal">175</div>
+      <div class="text-xs mt-1" style="color:var(--text-secondary)">场论坛</div>
+    </div>
+    <div class="stat-card glass glass-hover p-4 text-center">
+      <div class="font-orbitron text-3xl font-bold" style="color:var(--accent-purple);text-shadow:0 0 20px rgba(168,85,247,0.4)">4</div>
+      <div class="text-xs mt-1" style="color:var(--text-secondary)">天会期</div>
+    </div>
+    <div class="stat-card glass glass-hover p-4 text-center">
+      <div class="font-orbitron text-3xl font-bold" style="color:var(--accent-pink);text-shadow:0 0 20px rgba(236,72,153,0.4)">7</div>
+      <div class="text-xs mt-1" style="color:var(--text-secondary)">个场馆</div>
+    </div>
+    <div class="stat-card glass glass-hover p-4 text-center">
+      <div class="font-orbitron text-3xl font-bold" style="color:#4ade80;text-shadow:0 0 20px rgba(74,222,128,0.4)">13</div>
+      <div class="text-xs mt-1" style="color:var(--text-secondary)">条赛道</div>
+    </div>
+  </div>
+</section>
+
+<!-- Navigation Bar -->
+<nav class="sticky top-0 z-50 px-6 py-3 glass" style="border-radius:0;border-left:none;border-right:none;border-top:none">
+  <div class="nav-bar max-w-7xl mx-auto flex items-center gap-4 flex-wrap">
+    <!-- View Switcher -->
+    <div class="flex items-center gap-2">
+      <button class="nav-btn" data-view="timeline">时间轴</button>
+      <button class="nav-btn active" data-view="map">地图</button>
+      <button class="nav-btn" data-view="tracks">赛道</button>
+      <button class="nav-btn relative" data-view="schedule">
+        我的日程
+        <span id="favBadge" class="absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold" style="background:var(--accent-pink);color:#fff;display:none"></span>
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="relative flex-1 min-w-[200px] max-w-md">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style="color:var(--text-secondary)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input type="text" id="searchInput" class="search-input" placeholder="搜索论坛名称、赛道、场馆..."/>
+    </div>
+
+    <!-- Date Filter -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <button class="filter-pill active" data-date="all">全部</button>
+      <button class="filter-pill" data-date="7月17日">7.17</button>
+      <button class="filter-pill" data-date="7月18日">7.18</button>
+      <button class="filter-pill" data-date="7月19日">7.19</button>
+      <button class="filter-pill" data-date="7月20日">7.20</button>
+    </div>
+  </div>
+
+  <!-- Track Filter (collapsible on mobile) -->
+  <div class="max-w-7xl mx-auto mt-3" id="trackFilterWrapper">
+    <button class="track-toggle" id="trackToggle" onclick="toggleTrackFilter()">
+      <span class="track-toggle-label">赛道筛选</span>
+      <span class="track-toggle-status" id="trackToggleStatus">全部</span>
+      <svg class="track-toggle-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="track-filter-body" id="trackFilterBody">
+      <div class="flex items-center gap-2 flex-wrap" id="trackFilters"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main class="relative z-10 px-6 py-6 max-w-7xl mx-auto">
+
+  <!-- 议程应急联动卡片 -->
+  <div id="agendaAlertCard" class="agenda-alert" style="display:none">
+    <div class="agenda-alert-title">下一场论坛 · 应急提醒</div>
+    <div id="agendaAlertEvent" class="agenda-alert-event"></div>
+    <div id="agendaAlertTime" class="agenda-alert-time"></div>
+    <div id="agendaAlertSuggestion" class="agenda-alert-suggestion"></div>
+  </div>
+
+  <!-- Timeline View -->
+  <section id="timelineView" class="view-section">
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <h2 class="text-xl font-bold">时间轴</h2>
+      <span class="text-sm" style="color:var(--text-secondary)" id="timelineCount"></span>
+    </div>
+    <div id="timelineContent"></div>
+  </section>
+
+  <!-- Map View -->
+  <section id="mapViewSection" class="view-section active">
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="text-xl font-bold">场馆地图</h2>
+      <span class="text-sm" style="color:var(--text-secondary)">点击图钉查看场馆活动</span>
+    </div>
+    <div id="mapView"></div>
+  </section>
+
+  <!-- Track View -->
+  <section id="tracksView" class="view-section">
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="text-xl font-bold">赛道分类</h2>
+      <span class="text-sm" style="color:var(--text-secondary)">点击赛道卡片查看该分类所有论坛</span>
+    </div>
+    <div id="tracksContent" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </section>
+
+  <!-- Schedule View -->
+  <section id="scheduleView" class="view-section">
+    <div class="flex items-center gap-3 mb-4">
+      <h2 class="text-xl font-bold">我的日程</h2>
+      <span class="text-sm" style="color:var(--text-secondary)" id="scheduleCount"></span>
+    </div>
+    <div id="scheduleContent"></div>
+  </section>
+
+</main>
+
+<!-- Visitor Counter Footer -->
+<footer class="relative z-10 px-6 py-6 text-center">
+  <div class="glass inline-flex items-center gap-6 px-6 py-3 rounded-2xl counter-widget">
+    <div class="flex items-center gap-2">
+      <span class="text-sm" style="color:var(--text-secondary)">总访问量</span>
+      <span class="font-orbitron text-xl font-bold neon-cyan" id="vercount_value_site_pv">···</span>
+    </div>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,0.1)"></div>
+    <div class="flex items-center gap-2">
+      <span class="text-sm" style="color:var(--text-secondary)">访客数</span>
+      <span class="font-orbitron text-xl font-bold neon-purple" id="vercount_value_site_uv">···</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Event Detail Modal -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal-content glass p-6">
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- 积水上报模态框 -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal-content glass p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold" style="color:#fb923c">上报积水点</h3>
+      <button onclick="closeReportModal()" style="color:var(--text-secondary);font-size:22px;background:none;border:none;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div class="report-field">
+      <label class="report-label">位置</label>
+      <button class="location-btn" id="locationBtn" onclick="useMyLocation()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span id="locationText">使用我的定位</span>
+      </button>
+      <div id="locationResult" style="font-size:12px;color:var(--text-secondary);margin-top:6px">或直接在地图上点击选择位置</div>
+    </div>
+    <div class="report-field">
+      <label class="report-label">严重程度</label>
+      <div class="severity-options">
+        <div class="severity-option light" data-severity="light" onclick="selectSeverity('light')">轻度</div>
+        <div class="severity-option medium" data-severity="medium" onclick="selectSeverity('medium')">中度</div>
+        <div class="severity-option heavy" data-severity="heavy" onclick="selectSeverity('heavy')">重度</div>
+      </div>
+    </div>
+    <div class="report-field">
+      <label class="report-label">描述（选填）</label>
+      <textarea class="report-textarea" id="reportDesc" placeholder="描述积水情况，如"路口积水到膝盖"..."></textarea>
+    </div>
+    <div class="report-field">
+      <label class="report-label">现场照片（选填）</label>
+      <input type="file" accept="image/*" capture="environment" id="reportPhoto" onchange="previewPhoto(this)" style="font-size:13px;color:var(--text-secondary);width:100%">
+      <img id="photoPreview" class="report-photo-preview" style="display:none">
+    </div>
+    <button class="report-submit" id="reportSubmitBtn" onclick="submitReport()">提交上报</button>
+  </div>
+</div>
+
+<!-- 上报 FAB 按钮 -->
+<button class="fab-btn" onclick="openReportModal()" title="上报积水点">
+  <svg width="26" height="26" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m9-7H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
+</button>
+
+<script>
+// ===== DATA =====
+const APP_DATA = {"events":[{"id":1,"track":"治理标准与政策","name_cn":"2026世界人工智能大会暨人工智能全球治理高级别会议主论坛","name_en":"2026 WORLD AI CONFERENCE & HIGH-LEVEL MEETING ON GLOBAL AI GOVERNANCE MAIN FORUM","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博中心金厅A+B","location_en":"Expo Center Gold Hall A+B","venue":"世博中心","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":2,"track":"女性与多元发展","name_cn":"AI女性论坛","name_en":"AI Transformation · Her Edge The Rise of Women's Strength","date":"7月17日","time_start":"13:30","time_end":"15:20","time_raw":"7月17日 13:30-15:20","location_cn":"西岸国际会展中心2号厅A","location_en":"West Bund International Convention and Exhibition Center Hall 2A","venue":"西岸国际会展中心","track_tag":"多元发展","track_direction":"女性科技力量、多元包容、领导力发展、性别平等","track_industry":"全行业（关注多元包容与女性领导力）"},{"id":3,"track":"治理标准与政策","name_cn":"全球人工智能创新治理中心·人工智能全球治理与可持续发展挑战与应对论坛","name_en":"CGAlG · Global Al Governance and Sustainable Development: Challenges and Responses","date":"7月17日","time_start":"13:30","time_end":"17:00","time_raw":"7月17日 13:30-17:00","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":4,"track":"治理标准与政策","name_cn":"人工智能标准国际化论坛","name_en":"International Artificial Intelligence Standardization Forum","date":"7月17日","time_start":"13:30","time_end":"17:30","time_raw":"7月17日 13:30-17:30","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room 518","venue":"世博中心","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":5,"track":"前沿科技与探索","name_cn":"数学与人工智能论坛","name_en":"Resonance Summit: Al x Mathematics and the Next Paradigm Shift","date":"7月17日","time_start":"13:25","time_end":"18:00","time_raw":"7月17日 13:25-18:00","location_cn":"世博中心银厅A","location_en":"Expo Center Silver Hall A","venue":"世博中心","track_tag":"前沿科研","track_direction":"量子科技、材料科学、数学AI、基础研究、科学智能","track_industry":"科研院所、新材料、量子计算、航空航天、基础研究"},{"id":6,"track":"能源与可持续发展","name_cn":"AI与先进核能共筑可持续智能未来论坛","name_en":"Al and Advanced Nuclear Energy for a Sustainable Intelligent Future","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"西岸国际会展中心402会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 402","venue":"西岸国际会展中心","track_tag":"绿色能源","track_direction":"AI+能源、双碳、绿色智能、核能、海洋经济、船舶工业","track_industry":"能源、电力、核能、环保、船舶、海洋工程"},{"id":7,"track":"大模型与AI基础","name_cn":"人工智能+消费论坛","name_en":"Artificial Intelligence + Consumption Forum","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":8,"track":"前沿科技与探索","name_cn":"上海量子城市空间智能建设论坛","name_en":"Shanghai Quantum City Spatial Intelligence Construction Sub-Forum","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"上海市杨浦区共青路136号复兴岛“复兴云厅”","location_en":"Fuxing Cloud Hall, No. 136 Gongqing Road, Fuxing Island, Yangpu District, Shanghai","venue":"其他场馆","track_tag":"前沿科研","track_direction":"量子科技、材料科学、数学AI、基础研究、科学智能","track_industry":"科研院所、新材料、量子计算、航空航天、基础研究"},{"id":9,"track":"产业与工业智能化","name_cn":"人工智能终端产业演进与协同发展论坛","name_en":"High-Quality Development Forum for the Artificial Intelligence Terminal Industry","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":10,"track":"医疗与生命科学","name_cn":"AI赋能生命健康新范式论坛","name_en":"Al Empowered New Paradigm for Life and Health Forum","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room 616","venue":"世博中心","track_tag":"医疗健康","track_direction":"AI制药、智慧医疗、生命科学、健康管理、医学影像","track_industry":"医药、医疗设备、医院、生物科技、健康管理"},{"id":11,"track":"治理标准与政策","name_cn":"人工智能赋能无线电创新论坛","name_en":"Al-Empowered Radio Innovation and Development Forum","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博中心618会议室","location_en":"Expo Center Conference Room 618","venue":"世博中心","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":12,"track":"大模型与AI基础","name_cn":"AI Agent时代的一人公司与Token经济论坛","name_en":"One-Person Company and Token Economics in the Al Agent Era","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博展览馆H4创新舞台","location_en":"Expo Exhibition and Convention Center Innovation Stage, Exhibition Hall4","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":13,"track":"能源与可持续发展","name_cn":"人工智能与能源双向赋能论坛","name_en":"Sub-forum 'Mutual Empowerment of Al and Energy'","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"绿色能源","track_direction":"AI+能源、双碳、绿色智能、核能、海洋经济、船舶工业","track_industry":"能源、电力、核能、环保、船舶、海洋工程"},{"id":14,"track":"教育与人才发展","name_cn":"“人机共育·重塑大学”人工智能+教育论坛","name_en":"Reimagining the University for an Al-Driven Future","date":"7月17日","time_start":"14:00","time_end":"17:30","time_raw":"7月17日 14:00-17:30","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":15,"track":"算力与AI芯片","name_cn":"RISC-V与AI融合发展论坛","name_en":"RISC-V & Al Integrated Development Forum","date":"7月17日","time_start":"14:00","time_end":"17:00","time_raw":"7月17日 14:00-17:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":16,"track":"大模型与AI基础","name_cn":"从一次性Agent到记忆原生智能时代论坛","name_en":"Build with Memory, From One-off Agents to Memory-Native Intelligence","date":"7月17日","time_start":"14:30","time_end":"18:00","time_raw":"7月17日 14:30-18:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 9","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":17,"track":"算力与AI芯片","name_cn":"智算超节点与算电协同论坛","name_en":"Forum on Intelligent Computing Super-nodes and Computing-Power Synergy","date":"7月17日","time_start":"14:00","time_end":"17:30","time_raw":"7月17日 14:00-17:30","location_cn":"世博展览馆8号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 8","venue":"世博展览馆","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":18,"track":"产业与工业智能化","name_cn":"物理AI重塑智能制造论坛","name_en":"Physical Al for Next Generation Manufacturing","date":"7月17日","time_start":"14:00","time_end":"17:30","time_raw":"7月17日 14:00-17:30","location_cn":"西岸国际会展中心401会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 401","venue":"西岸国际会展中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":19,"track":"治理标准与政策","name_cn":"人工智能规则全球对话与协同发展论坛","name_en":"Global Al Policy Dialogue and Collaboration Development Forum","date":"7月17日","time_start":"14:00","time_end":"18:00","time_raw":"7月17日 14:00-18:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room 619","venue":"世博中心","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":20,"track":"前沿科技与探索","name_cn":"人工智能赋能材料科学论坛","name_en":"Al for Materials Forum","date":"7月17日","time_start":"14:00","time_end":"18:00","time_raw":"7月17日 14:00-18:00","location_cn":"西岸国际会展中心2号厅C","location_en":"West Bund International Convention and Exhibition Center Hall 2C","venue":"西岸国际会展中心","track_tag":"前沿科研","track_direction":"量子科技、材料科学、数学AI、基础研究、科学智能","track_industry":"科研院所、新材料、量子计算、航空航天、基础研究"},{"id":21,"track":"产业与工业智能化","name_cn":"模数同频智造共振AI赋能新型工业化发展论坛","name_en":"Synchronizing Models & Data, Resonating Smart Manufacturing: Al Empowering New Industrialization Forum","date":"7月17日","time_start":"14:00","time_end":"16:20","time_raw":"7月17日 14:00-16:20","location_cn":"世博中心银厅B","location_en":"Expo Center Silver Hall B","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":22,"track":"产业与工业智能化","name_cn":"“智赋新质 全域焕新”企业人工智能高质量发展论坛","name_en":"Al Empowers New Quality Productive Forces · Comprehensive Renewal","date":"7月17日","time_start":"14:30","time_end":"17:00","time_raw":"7月17日 14:30-17:00","location_cn":"世博中心银厅C+D","location_en":"Expo Center Silver Hall C+D","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":23,"track":"大模型与AI基础","name_cn":"AI驱动经济前沿与全球协同论坛","name_en":"Seminar on Fostering Economic Innovation and Global Collaboration through Al","date":"7月17日","time_start":"14:30","time_end":"17:00","time_raw":"7月17日 14:30-17:00","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room 517","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":24,"track":"综合论坛","name_cn":"人工智能赋能全民早期预警携手应对气候变化论坛","name_en":"Al Empowering Early Warnings for All in Response to Climate Change","date":"7月17日","time_start":"14:30","time_end":"17:30","time_raw":"7月17日 14:30-17:30","location_cn":"世博滨江酒店四季厅","location_en":"Expo Riverside Hotel Four Seasons Hall","venue":"世博滨江酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":25,"track":"综合论坛","name_cn":"共赢金砖论坛","name_en":"Win-Win BRICS Scientific Frontier Forum","date":"7月17日","time_start":"15:00","time_end":"18:40","time_raw":"7月17日 15:00-18:40","location_cn":"西岸国际会展中心2号厅B","location_en":"West Bund International Convention and Exhibition Center Hall 2B","venue":"西岸国际会展中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":26,"track":"前沿科技与探索","name_cn":"科学前沿论坛","name_en":"Scientific Frontier Forum","date":"7月17日","time_start":"15:00","time_end":"18:45","time_raw":"7月17日 15:00-18:45","location_cn":"上海市徐汇区龙兰路801号上海人工智能实验室新园区","location_en":"Shanghai Artificial Intelligence Laboratory New Campus No.801 Longlan Road, Xuhui District, Shanghai, China","venue":"其他场馆","track_tag":"前沿科研","track_direction":"量子科技、材料科学、数学AI、基础研究、科学智能","track_industry":"科研院所、新材料、量子计算、航空航天、基础研究"},{"id":27,"track":"综合论坛","name_cn":"WAICA·世界人工智能大会学术2026启动会","name_en":"WAICA 2026 Opening Ceremony","date":"7月18日","time_start":"09:00","time_end":"11:30","time_raw":"7月18日 09:00-11:30","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":28,"track":"综合论坛","name_cn":"创造下一代人工智能论坛","name_en":"Artificial Intelligence Journey: Creating the Next Generation of Al","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room 518","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":29,"track":"综合论坛","name_cn":"智能社会论坛：迈向人机共生的智能社会","name_en":"Tongji University · Intelligent Society Forum: Towards a Human-Machine Symbiotic Intelligent Society","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"上海世博桐森酒店桐森厅3","location_en":"Thompson Shanghai Expo Thompson Hall 3","venue":"世博桐森酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":30,"track":"综合论坛","name_cn":"人工智能创新发展论坛","name_en":"CECLOUD Forum on Al Innovation and Development","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"上海世博桐森酒店多功能厅1+2","location_en":"Thompson Shanghai Expo Multi-functional Hall 1+2","venue":"世博桐森酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":31,"track":"算力与AI芯片","name_cn":"全栈智算生态论坛","name_en":"ZTE Full-Stack Intelligent Computing Ecosystem Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room 616","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":32,"track":"大模型与AI基础","name_cn":"认知智能论坛","name_en":"Cognition of the World, Innovation for Future","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心515会议室","location_en":"Expo Center Conference Room 515","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":33,"track":"综合论坛","name_cn":"两岸人工智能融合发展创新论坛","name_en":"Cross-Straits Forum on Artificial Intelligence Integrated Development and Innovation","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":34,"track":"大模型与AI基础","name_cn":"基座大模型架构创新与生态合作论坛","name_en":"SenseTime Foundation Large Model Architecture Innovation & Ecosystem Cooperation Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心银厅A","location_en":"Expo Center Silver Hall A","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":35,"track":"综合论坛","name_cn":"AI管理创新论坛","name_en":"Unlocking Hidden Value Al for Management Innovation Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room 619","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":36,"track":"算力与AI芯片","name_cn":"大规模国产算力系统驱动AI+规模化落地论坛","name_en":"Large-Scale Homegrown Computing Systems Driving Al+ Scaled Application Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"张江科学会堂204会议室","location_en":"Zhangjiang Science Hall Conference Room 204","venue":"张江科学会堂","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":37,"track":"综合论坛","name_cn":"星辰共生人工智能生态论坛","name_en":"China Telecom Artificial Intelligence Ecological Conference (2026)","date":"7月18日","time_start":"09:30","time_end":"12:00","time_raw":"7月18日 09:30-12:00","location_cn":"世博中心金厅A+B","location_en":"Expo Center Gold Hall A+B","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":38,"track":"产业与工业智能化","name_cn":"实体世界智能科学论坛","name_en":"Al for the Real World","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":39,"track":"产业与工业智能化","name_cn":"AI产业技术安全生态论坛","name_en":"Tophant Al Industry Technology Security Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room9","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":40,"track":"综合论坛","name_cn":"智擎未来人工智能应用创新论坛","name_en":"China Tower \"Intelligent Engine for the Future\" Al Application Innovation Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心618会议室","location_en":"Expo Center Conference Room 618","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":41,"track":"治理标准与政策","name_cn":"全球人工智能治理的可能路径论坛","name_en":"From Consensus to Action: Possible Pathways for Global Al Governance","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"上海世博桐森酒店桐森厅1+2","location_en":"Thompson Shanghai Expo Thompson Hall 1+2","venue":"世博桐森酒店","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":42,"track":"综合论坛","name_cn":"Al in Action应用创新论坛","name_en":"Al in Action Tencent Al Applications Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"西岸国际会展中心2号厅B","location_en":"West Bund International Convention and Exhibition Center Hall 2B","venue":"西岸国际会展中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":43,"track":"大模型与AI基础","name_cn":"AgenticCloud:智能体时代的基础设施论坛","name_en":"Agentic Cloud: Infrastructure for the Agentic Era","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心银厅C+D","location_en":"Expo Center Silver Hall C+D","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":44,"track":"算力与AI芯片","name_cn":"以开放互联释放多元算力效能—AI算力技术架构创新论坛","name_en":"AI Computing Architecture Innovation Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博中心银厅B","location_en":"Expo Center Silver Hall B","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":45,"track":"教育与人才发展","name_cn":"新声归潮AI上海创新资源对接会暨2026青年海归科技对话论坛","name_en":"Al Innovation Resource Matchmaking Summit","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"西岸国际会展中心401会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 401","venue":"西岸国际会展中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":46,"track":"产业与工业智能化","name_cn":"AI进入物理世界:模型、数据、终端与场景","name_en":"Al into the Physical World: Models, Data, Devices, and Use cases","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":47,"track":"算力与AI芯片","name_cn":"RISC-V和物理智能论坛","name_en":"RISC-V and Physical Al Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"张江科学会堂科创厅","location_en":"Zhangjiang Science Hall Inspire Hall","venue":"张江科学会堂","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":48,"track":"大模型与AI基础","name_cn":"词元时代万物智能论坛","name_en":"Token Era: Intelligence of Things","date":"7月18日","time_start":"09:00","time_end":"12:30","time_raw":"7月18日 09:00-12:30","location_cn":"世博展览馆1B会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1B","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":49,"track":"金融与科技投资","name_cn":"AI原生与硬科技投资生态论坛","name_en":"Al-Native & Hard Tech Investment Ecosystem Forum","date":"7月18日","time_start":"09:00","time_end":"12:00","time_raw":"7月18日 09:00-12:00","location_cn":"世博展览馆H4领航舞台","location_en":"Expo Exhibition and Convention Center - Pioneer Stage, Exhibition Hall4","venue":"世博展览馆","track_tag":"金融投资","track_direction":"AI投融资、金融科技、企业家生态、产业资本、硬科技投资","track_industry":"银行、证券、保险、创投、PE/VC、金融科技"},{"id":50,"track":"产业与工业智能化","name_cn":"企业智能体产业论坛","name_en":"Enterprise Agent Forum","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"上海世博桐森酒店盛宴厅","location_en":"Thompson Shanghai Expo Banquet Hall","venue":"世博桐森酒店","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":51,"track":"教育与人才发展","name_cn":"人工智能青年先锋对话论坛","name_en":"Intelligence Pioneers Dialogue among Chinese Youth Artificial","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"西岸国际会展中心2号厅C","location_en":"West Bund International Convention and Exhibition Center Hall 2C","venue":"西岸国际会展中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":52,"track":"综合论坛","name_cn":"AI应用创新全球论坛","name_en":"Al Computing Applications Innovation Global Forum2026","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":53,"track":"算力与AI芯片","name_cn":"光计算与光互连双轮驱动的AI基础设施新范式论坛","name_en":"Optical Computing and Optical Interconnects: A New Dual-Engine Paradigm for Al Infrastructure Forum","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room 517","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":54,"track":"产业与工业智能化","name_cn":"具身智能前沿趋势与产业生态论坛","name_en":"Forum on Frontier Trends and Industrial Ecosystem of Embodied Intelligence","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"西岸国际会展中心402会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 402","venue":"西岸国际会展中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":55,"track":"产业与工业智能化","name_cn":"工业AI迈进现实-工业AI创新论坛暨Eigen工程智能体发布会","name_en":"Make Industrial Al Real - Siemens Industrial Al Innovation Forum and Eigen Engineering Agent Launch Ceremony","date":"7月18日","time_start":"09:30","time_end":"11:30","time_raw":"7月18日 09:30-11:30","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":56,"track":"大模型与AI基础","name_cn":"AI未来发展论坛","name_en":"Al Future Forum","date":"7月18日","time_start":"09:30","time_end":"12:00","time_raw":"7月18日 09:30-12:00","location_cn":"西岸国际会展中心2号厅A","location_en":"West Bund International Convention and Exhibition Center Hall 2A","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":57,"track":"产业与工业智能化","name_cn":"WAIC企业家论坛","name_en":"WAIC Entrepreneurs Forum","date":"7月18日","time_start":"13:00","time_end":"17:00","time_raw":"7月18日 13:00-17:00","location_cn":"上海世博桐森酒店桐森厅1+2","location_en":"Thompson Shanghai Expo Thompson Hall 1+2","venue":"世博桐森酒店","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":58,"track":"治理标准与政策","name_cn":"智法共生·法律大模型推理革新与应用生态论坛","name_en":"Legal Tech Scenario Restructuring & Global Governance in the LLM Era","date":"7月18日","time_start":"13:30","time_end":"17:00","time_raw":"7月18日 13:30-17:00","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"治理合规","track_direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","track_industry":"法律、合规、政务、公共服务、标准化机构、政府部门"},{"id":59,"track":"产业与工业智能化","name_cn":"实体世界智能科学论坛","name_en":"Al for the Real World","date":"7月18日","time_start":"13:30","time_end":"17:00","time_raw":"7月18日 13:30-17:00","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":60,"track":"大模型与AI基础","name_cn":"心智与智能青年生态论坛","name_en":"Mind Meets Machine Youth Forum","date":"7月18日","time_start":"13:30","time_end":"17:00","time_raw":"7月18日 13:30-17:00","location_cn":"西岸国际会展中心402会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 402","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":61,"track":"综合论坛","name_cn":"AI创新者思享汇","name_en":"Al Innovators Summit & Thought Share","date":"7月18日","time_start":"13:30","time_end":"17:00","time_raw":"7月18日 13:30-17:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room9","venue":"世博展览馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":62,"track":"大模型与AI基础","name_cn":"从大模型到智能体迈向自主智能新纪元论坛","name_en":"CAICT Agent Forum: From Large Models to Agents Towards a New Era of Autonomous Intelligence Forum","date":"7月18日","time_start":"13:30","time_end":"17:30","time_raw":"7月18日 13:30-17:30","location_cn":"西岸国际会展中心2号厅B","location_en":"West Bund International Convention and Exhibition Center Hall 2B","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":63,"track":"算力与AI芯片","name_cn":"人工智能时代的开放计算与产业生态论坛","name_en":"Open Computing Infrastructure Empowering Digital-Intelligent Application Innovation Forum","date":"7月18日","time_start":"13:30","time_end":"17:30","time_raw":"7月18日 13:30-17:30","location_cn":"张江科学会堂科创厅","location_en":"Zhangjiang Science Hall Inspire Hall","venue":"张江科学会堂","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":64,"track":"算力与AI芯片","name_cn":"未来计算与未来算力论坛","name_en":"Future Computing - Future Computing Power Forum","date":"7月18日","time_start":"13:30","time_end":"17:30","time_raw":"7月18日 13:30-17:30","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":65,"track":"金融与科技投资","name_cn":"智见AI合创未来—人工智能投融资论坛","name_en":"Al Foresight, Co-creating the Future Al Investment & Financing Forum","date":"7月18日","time_start":"13:30","time_end":"18:00","time_raw":"7月18日 13:30-18:00","location_cn":"世博中心银厅A","location_en":"Expo Center Silver Hall A","venue":"世博中心","track_tag":"金融投资","track_direction":"AI投融资、金融科技、企业家生态、产业资本、硬科技投资","track_industry":"银行、证券、保险、创投、PE/VC、金融科技"},{"id":66,"track":"内容创意与AIGC","name_cn":"从量产到精品·Al赋能影视内容创作新生态论坛","name_en":"Shanghai Al-Powered Micro-Short Drama Industry Development Forum","date":"7月18日","time_start":"14:00","time_end":"16:00","time_raw":"7月18日 14:00-16:00","location_cn":"世博滨江酒店四季厅","location_en":"Expo Riverside Hotel Four Seasons Hall","venue":"世博滨江酒店","track_tag":"内容创意","track_direction":"AIGC内容生成、微短剧、影视创作、数字内容、设计创意","track_industry":"传媒、影视、广告、设计、内容创作、游戏、文化产业"},{"id":67,"track":"产业与工业智能化","name_cn":"产业数据智能跃迁与普惠论坛","name_en":"Industrial Data Intelligence: Transformation and Inclusion","date":"7月18日","time_start":"14:00","time_end":"16:45","time_raw":"7月18日 14:00-16:45","location_cn":"世博中心515会议室","location_en":"Expo Center Conference Room 515","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":68,"track":"算力与AI芯片","name_cn":"面向10亿瓦级AI工厂的网络创新论坛","name_en":"Network innovation for Giga-scale Al factories","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room 517","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":69,"track":"能源与可持续发展","name_cn":"领深蓝Al+船海产业实景应用论坛","name_en":"Green Innovation & Blue Intelligence: Al Real-World Applications in Maritime & Shipbuilding Industry","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博展览馆1B会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1B","venue":"世博展览馆","track_tag":"绿色能源","track_direction":"AI+能源、双碳、绿色智能、核能、海洋经济、船舶工业","track_industry":"能源、电力、核能、环保、船舶、海洋工程"},{"id":70,"track":"大模型与AI基础","name_cn":"AgenticAI进场重塑全球供应链创新论","name_en":"AGENTIC AI ENTERS THE GAME-RESHAPING GLOBAL SUPPLY CHAINS","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room518","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":71,"track":"算力与AI芯片","name_cn":"芯智相融Al启未来产融生态合作论坛","name_en":"Chip & Intelligence Integrated, Al Powers the Future Forum","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":72,"track":"算力与AI芯片","name_cn":"算力基础设施与AI芯片协同发展论坛","name_en":"Forum on Computing Infrastructure and Al Chip Collaborative Development","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"上海世博桐森酒店桐森厅3","location_en":"Thompson Shanghai Expo Thompson Hall 3","venue":"世博桐森酒店","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":73,"track":"综合论坛","name_cn":"迈向决策智能的技术与应用探索","name_en":"Technology and Application Explorations on the Path to Decision Intelligence","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"上海世博桐森酒店多功能厅1+2","location_en":"Thompson Shanghai Expo Multi-functional Hall 1+2","venue":"世博桐森酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":74,"track":"大模型与AI基础","name_cn":"Token经济协同芯片生态论坛","name_en":"A Collaborative Chip Ecosystem for the Token Economy","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心银厅B","location_en":"Expo Center Silver Hall B","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":75,"track":"大模型与AI基础","name_cn":"全栈AI赋能民生福祉论坛","name_en":"Full-Stack Al for People's Well-being","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room 616","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":76,"track":"大模型与AI基础","name_cn":"AGI前夜:智能如何突破自己的上限","name_en":"AGI on the Horizon: How Can Intelligence Transcend Its Own Limits","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"上海世博桐森酒店盛宴厅","location_en":"Thompson Shanghai Expo Banquet Hall","venue":"世博桐森酒店","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":77,"track":"综合论坛","name_cn":"语料创新发展论坛","name_en":"Corpus as Base, Intelligence in Rise","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心金厅A+B","location_en":"Expo Center Gold Hall A+B","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":78,"track":"教育与人才发展","name_cn":"AI青年创变者创新论坛","name_en":"Al Youth Innovators Innovation Forum","date":"7月18日","time_start":"14:00","time_end":"17:30","time_raw":"7月18日 14:00-17:30","location_cn":"西岸国际会展中心401会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 401","venue":"西岸国际会展中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":79,"track":"医疗与生命科学","name_cn":"AI在全球医疗领域的应用实践与监督机制论坛","name_en":"The Real-World Application and Governance Mechanisms of Al in Global Healthcare","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心430会议室","location_en":"Expo Center Conference Room 430","venue":"世博中心","track_tag":"医疗健康","track_direction":"AI制药、智慧医疗、生命科学、健康管理、医学影像","track_industry":"医药、医疗设备、医院、生物科技、健康管理"},{"id":80,"track":"机器人与具身智能","name_cn":"从数字屏幕到具身智能物理世界新范式论坛","name_en":"Beyond the Screen: Embodied Al and the New Paradigm for the Physical World","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心银厅C+D","location_en":"Expo Center Silver Hall C+D","venue":"世博中心","track_tag":"智能硬件","track_direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","track_industry":"汽车、智能制造、物流、安防、机器人、消费电子"},{"id":81,"track":"大模型与AI基础","name_cn":"认知涌现·数据新生人工智能论坛","name_en":"Transwarp Technology \"Cognitive Emergence, Data Reborn\" Al Forum","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room 619","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":82,"track":"内容创意与AIGC","name_cn":"AI浪潮下的媒体创新论坛","name_en":"Media Innovation Forum in the Al Era","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心431会议室","location_en":"Expo Center Conference Room 431","venue":"世博中心","track_tag":"内容创意","track_direction":"AIGC内容生成、微短剧、影视创作、数字内容、设计创意","track_industry":"传媒、影视、广告、设计、内容创作、游戏、文化产业"},{"id":83,"track":"综合论坛","name_cn":"超智融合驱动Al4S发展论坛","name_en":"Supercomputing-Al Integration for Al4S Development Forum","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博中心618会议室","location_en":"Expo Center Conference Room 618","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":84,"track":"综合论坛","name_cn":"WAICA - Main Track Session 1","name_en":"","date":"7月18日","time_start":"14:00","time_end":"17:00","time_raw":"7月18日 14:00-17:00","location_cn":"世博展览馆8号会议室","location_en":"","venue":"世博展览馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":85,"track":"前沿科技与探索","name_cn":"AI网络前沿生态论坛","name_en":"AI Networking, Work as One","date":"7月18日","time_start":"14:00","time_end":"17:30","time_raw":"7月18日 14:00-17:30","location_cn":"张江科学会堂204会议室","location_en":"Zhangjiang Science Hall Conference Room 204","venue":"张江科学会堂","track_tag":"前沿科研","track_direction":"量子科技、材料科学、数学AI、基础研究、科学智能","track_industry":"科研院所、新材料、量子计算、航空航天、基础研究"},{"id":86,"track":"产业与工业智能化","name_cn":"AI企业的商业化突围与资本进阶论坛","name_en":"Commercial Breakthrough and Capital Advancement for Al Enterprises Forum","date":"7月18日","time_start":"14:00","time_end":"17:30","time_raw":"7月18日 14:00-17:30","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":87,"track":"算力与AI芯片","name_cn":"算电协同XToken工厂东盟绿色智算与AI创新生态论坛","name_en":"Computing-Energy Synergy X Token Factory ASEAN Green Intelligent Computing and Al Innovation Ecosystem Conference","date":"7月18日","time_start":"14:00","time_end":"18:00","time_raw":"7月18日 14:00-18:00","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":88,"track":"综合论坛","name_cn":"科学智能开放论坛","name_en":"Al for Science Discovery Forum","date":"7月18日","time_start":"14:00","time_end":"18:20","time_raw":"7月18日 14:00-18:20","location_cn":"西岸国际会展中心2号厅C","location_en":"West Bund International Convention and Exhibition Center Hall 2C","venue":"西岸国际会展中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":89,"track":"综合论坛","name_cn":"WAIC·思想者论坛姚期智专场","name_en":"WAIC Thought Leaders Forum -Prof.Andrew Chi-Chih Yao","date":"7月19日","time_start":"09:00","time_end":"10:00","time_raw":"7月19日 09:00-10:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":90,"track":"大模型与AI基础","name_cn":"向深处去:2026 Enterprise AGI价值落地与产业实证论坛","name_en":"Enterprise AGI: From Consensus to Commercial Value","date":"7月19日","time_start":"09:00","time_end":"11:10","time_raw":"7月19日 09:00-11:10","location_cn":"世博中心蓝厅","location_en":"Expo Center Blue Hall","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":91,"track":"算力与AI芯片","name_cn":"新一代智算云产业技术创新论坛","name_en":"Next-Generation Intelligent Computing Cloud Industry Technology Innovation Forum","date":"7月19日","time_start":"09:00","time_end":"11:40","time_raw":"7月19日 09:00-11:40","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":92,"track":"大模型与AI基础","name_cn":"AI赋能智慧港口全球航运生态体系论坛","name_en":"SIPG-Port Al Empower Smart Ports to Co-Create A New Global Shipping Ecosystem","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心430会议室","location_en":"Expo Center Conference Room 430","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":93,"track":"算力与AI芯片","name_cn":"专用算力时代下TPU的创新与共进论坛","name_en":"TPU Innovation and Collaborative Progress in the Era of Dedicated Computing Power","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":94,"track":"大模型与AI基础","name_cn":"数据要素赋能行业智能体论坛","name_en":"Forum on Data Elements Empowering Industry Al Agents| China Association of Information","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 9","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":95,"track":"综合论坛","name_cn":"AI规模化落地与增长新蓝图生态论坛","name_en":"Empowering Industries with Intelligence, Birthing New Value-Large-scale Al Implementation and New Blueprint for Growth","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room619","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":96,"track":"产业与工业智能化","name_cn":"人工智能引领产业变革思客会","name_en":"Xinhuanet Thinker Conference: Al-Driven Industrial Transformation","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"西岸国际会展中心2号厅B","location_en":"West Bund International Convention and Exhibition Center Hall 2B","venue":"西岸国际会展中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":97,"track":"产业与工业智能化","name_cn":"世界物理模型:重塑工业AI新范式论坛","name_en":"World Physical Model: Reshaping the New Paradigm of Industrial Al","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room518","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":98,"track":"算力与AI芯片","name_cn":"AI开放计算与智能体技术生态论坛","name_en":"Open Compute for Al and Al Agent Ecosystem Forum","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心618会议室","location_en":"Expo Center Conference Room 618","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":99,"track":"大模型与AI基础","name_cn":"端侧多模态基座赋能AI硬件论坛","name_en":"Om Al. End-side Multimodal Base Empowering Al Hardware Theme Forum","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room 517","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":100,"track":"金融与科技投资","name_cn":"智能经济发展生态论坛","name_en":"Intelligent Economy Development Forum","date":"7月19日","time_start":"09:00","time_end":"12:30","time_raw":"7月19日 09:00-12:30","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"金融投资","track_direction":"AI投融资、金融科技、企业家生态、产业资本、硬科技投资","track_industry":"银行、证券、保险、创投、PE/VC、金融科技"},{"id":101,"track":"产业与工业智能化","name_cn":"数智金融协同共创:Al+金融助力谱写高质量发展新篇章金融科技论坛","name_en":"Digital and Intelligent Finance, Synergistic Co-creation: Al + Finance Powers a New Chapter of High-Quality Development","date":"7月19日","time_start":"09:00","time_end":"11:20","time_raw":"7月19日 09:00-11:20","location_cn":"世博中心银厅C+D","location_en":"Expo Center Silver Hall C+D","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":102,"track":"产业与工业智能化","name_cn":"人工智能赋能物流网高质量发展论坛","name_en":"Al Empowering High-Quality Development of the Logistics Network","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博展览馆1B会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1B","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":103,"track":"产业与工业智能化","name_cn":"智在终端惠及千行On-device Al for All端侧AI创新和行业发展论坛","name_en":"Forum on On-Device Al Innovation and Industrial Development","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":104,"track":"大模型与AI基础","name_cn":"从Token到材料配方AI4S产业创新生态论坛","name_en":"From Token to Formula: Al for Materials Industrial Innovation Ecosystem Forum","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心515会议室","location_en":"Expo Center Conference Room 515","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":105,"track":"综合论坛","name_cn":"AI共生·智护未来论坛","name_en":"Empower the Secure Future","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room616","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":106,"track":"产业与工业智能化","name_cn":"东盟中国人工智能技术与产业合作生态论坛","name_en":"ASEAN-China Al Technology & Industry Collaboration Forum","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"西岸国际会展中心401会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 401","venue":"西岸国际会展中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":107,"track":"综合论坛","name_cn":"WAIC·在AI中看见具体的人(青春与锋芒)","name_en":"Amplified Individual:Seeing the Individual in Al (Youth and Fire)","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"上海世博桐森酒店盛宴厅","location_en":"Thompson Shanghai Expo Banquet Hall","venue":"世博桐森酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":108,"track":"产业与工业智能化","name_cn":"人工智能赋能防震减灾高质量发展论坛","name_en":"Forum on High-Quality Development of Disaster Prevention and Mitigation Empowered by Artificial Intelligence","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"张江科学会堂204会议室","location_en":"Zhangjiang Science Hall Conference Room 204","venue":"张江科学会堂","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":109,"track":"算力与AI芯片","name_cn":"WAICA研讨会·数学建模与科学计算中的人工智能","name_en":"WAICA Workshop: Al for Mathematical Modelling and Scientific Computing","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博展览馆8号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 8","venue":"世博展览馆","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":110,"track":"大模型与AI基础","name_cn":"WAICA研讨会·多模态智能体驱动的科学计算","name_en":"WAICA Workshop: Multi-Modal Agents for Science","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"西岸国际会展中心上海厅","location_en":"West Bund International Convention and Exhibition Center 5F- Shanghai Hall","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":111,"track":"综合论坛","name_cn":"WAICA · Main Track Session 2","name_en":"","date":"7月19日","time_start":"09:00","time_end":"12:00","time_raw":"7月19日 09:00-12:00","location_cn":"世博中心431会议室","location_en":"","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":112,"track":"教育与人才发展","name_cn":"国际人工智能教育论坛","name_en":"International Forum on Artificial Intelligence in Education","date":"7月19日","time_start":"09:00","time_end":"12:10","time_raw":"7月19日 09:00-12:10","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":113,"track":"医疗与生命科学","name_cn":"智能伙伴共建未来元医院论坛","name_en":"United Imaging Intelligence · Human-Al Partnership: Shaping the Digitelligent Hospital of Tomorrow","date":"7月19日","time_start":"09:00","time_end":"12:20","time_raw":"7月19日 09:00-12:20","location_cn":"西岸国际会展中心2号厅A","location_en":"West Bund International Convention and Exhibition Center Hall 2A","venue":"西岸国际会展中心","track_tag":"医疗健康","track_direction":"AI制药、智慧医疗、生命科学、健康管理、医学影像","track_industry":"医药、医疗设备、医院、生物科技、健康管理"},{"id":114,"track":"大模型与AI基础","name_cn":"前沿AI与智能体安全论坛","name_en":"Frontier and Agentic Al Safety Forum","date":"7月19日","time_start":"09:00","time_end":"12:30","time_raw":"7月19日 09:00-12:30","location_cn":"上海世博桐森酒店桐森厅1+2","location_en":"Thompson Shanghai Expo Thompson Hall 1+2","venue":"世博桐森酒店","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":115,"track":"机器人与具身智能","name_cn":"人形机器人与具身智能创新发展论坛","name_en":"Humanoid Robotics and Embodied Intelligence Development Forum","date":"7月19日","time_start":"09:00","time_end":"12:30","time_raw":"7月19日 09:00-12:30","location_cn":"世博中心银厅A","location_en":"Expo Center Silver Hall A","venue":"世博中心","track_tag":"智能硬件","track_direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","track_industry":"汽车、智能制造、物流、安防、机器人、消费电子"},{"id":116,"track":"产业与工业智能化","name_cn":"智启具身:迎接物理AI智能涌现论坛","name_en":"Embodied Intelligence Forum:The Horizon of Physical Al Emergence","date":"7月19日","time_start":"09:10","time_end":"12:20","time_raw":"7月19日 09:10-12:20","location_cn":"世博中心金厅A+B","location_en":"Expo Center Gold Hall A+B","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":117,"track":"机器人与具身智能","name_cn":"自动驾驶论坛","name_en":"High-Level Autonomous Driving Forum","date":"7月19日","time_start":"09:30","time_end":"12:00","time_raw":"7月19日 09:30-12:00","location_cn":"世博中心银厅B","location_en":"Expo Center Silver Hall B","venue":"世博中心","track_tag":"智能硬件","track_direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","track_industry":"汽车、智能制造、物流、安防、机器人、消费电子"},{"id":118,"track":"大模型与AI基础","name_cn":"AI时代全球青少年创新素养培育论坛","name_en":"Forum on Cultivating Global Youth Innovation Literacy in the Al Era","date":"7月19日","time_start":"09:30","time_end":"12:00","time_raw":"7月19日 09:30-12:00","location_cn":"西岸国际会展中心2号厅C","location_en":"West Bund International Convention and Exhibition Center Hall 2C","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":119,"track":"产业与工业智能化","name_cn":"长三角人工智能产业集群发展协同论坛","name_en":"Yangtze River Delta Artificial Intelligence Industrial Cluster Development Synergy Forum","date":"7月19日","time_start":"09:30","time_end":"12:00","time_raw":"7月19日 09:30-12:00","location_cn":"世博滨江酒店四季厅","location_en":"Expo Riverside Hotel Four Seasons Hall","venue":"世博滨江酒店","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":120,"track":"大模型与AI基础","name_cn":"世界模型与多模态范式跃迁论坛","name_en":"World Model and Multimodal Paradigm Transition","date":"7月19日","time_start":"09:30","time_end":"12:15","time_raw":"7月19日 09:30-12:15","location_cn":"西岸国际会展中心402会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 402","venue":"西岸国际会展中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":121,"track":"综合论坛","name_cn":"WAIC·思想者论坛Richard S Sutton专场","name_en":"WAIC Thought Leaders Forum - Prof.Richard S Sutton","date":"7月19日","time_start":"11:00","time_end":"12:00","time_raw":"7月19日 11:00-12:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":122,"track":"机器人与具身智能","name_cn":"具身人形机器人落地与核心零部件发展论坛","name_en":"The Future of Embodied Humanoid Robots and the Intelligent Upgrade of Core Components","date":"7月19日","time_start":"13:00","time_end":"16:55","time_raw":"7月19日 13:00-16:55","location_cn":"上海世博桐森酒店桐森厅3","location_en":"Thompson Shanghai Expo Thompson Hall3","venue":"世博桐森酒店","track_tag":"智能硬件","track_direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","track_industry":"汽车、智能制造、物流、安防、机器人、消费电子"},{"id":123,"track":"大模型与AI基础","name_cn":"智能体时代:引领企业价值跃迁论坛","name_en":"Reinvent with Agentic Al","date":"7月19日","time_start":"13:30","time_end":"16:30","time_raw":"7月19日 13:30-16:30","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room517","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":124,"track":"产业与工业智能化","name_cn":"WAIC·“涌现·无限”未来科技产业生态论坛","name_en":"Emergence & Infinity| Future Technology Industry Ecosystem Forum","date":"7月19日","time_start":"13:30","time_end":"17:30","time_raw":"7月19日 13:30-17:30","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":125,"track":"产业与工业智能化","name_cn":"国际AI产业创新生态论坛","name_en":"HKUST . Awaken Forum '26 Al Industry Innovation Network","date":"7月19日","time_start":"13:30","time_end":"18:00","time_raw":"7月19日 13:30-18:00","location_cn":"西岸国际会展中心2号厅B","location_en":"West Bund International Convention and Exhibition Center Hall 2B","venue":"西岸国际会展中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":126,"track":"综合论坛","name_cn":"WAIC·在AI中看见具体的人(深耕与守望)","name_en":"Amplified Individual: Seeing the Individual in Al (Depth and Endurance)","date":"7月19日","time_start":"13:30","time_end":"18:00","time_raw":"7月19日 13:30-18:00","location_cn":"上海世博桐森酒店盛宴厅","location_en":"Thompson Shanghai Expo Banquet Hall","venue":"世博桐森酒店","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":127,"track":"综合论坛","name_cn":"全球视野破局智能财务新范式论坛","name_en":"Global perspective, breaking the mould: redefining the paradigm of intelligent finance","date":"7月19日","time_start":"13:35","time_end":"17:25","time_raw":"7月19日 13:35-17:25","location_cn":"世博中心蓝厅","location_en":"Expo Center Blue Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":128,"track":"产业与工业智能化","name_cn":"具身智能产业生态论坛","name_en":"Al Convergence · 2026 Embodied Intelligence Ecosystem Forum","date":"7月19日","time_start":"13:40","time_end":"16:45","time_raw":"7月19日 13:40-16:45","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":129,"track":"综合论坛","name_cn":"WAIC·思想者论坛朱松纯专场","name_en":"WAIC Thought Leaders Forum-Prof.Songchun,Zhu","date":"7月19日","time_start":"14:00","time_end":"15:00","time_raw":"7月19日 14:00-15:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":130,"track":"大模型与AI基础","name_cn":"AGI基础设施与普惠实践论坛","name_en":"Infrastructure and Practice for Available AGI","date":"7月19日","time_start":"14:00","time_end":"16:50","time_raw":"7月19日 14:00-16:50","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room 518","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":131,"track":"产业与工业智能化","name_cn":"迈向自主化:工业AI落地的真实挑战与解法论坛","name_en":"Intelligent Trending Forum Toward Autonomy & Real Challenges and Solutions for Industrial Al Implementation","date":"7月19日","time_start":"13:30","time_end":"17:00","time_raw":"7月19日 13:30-17:00","location_cn":"上海世博桐森酒店桐森厅1+2","location_en":"Thompson Shanghai Expo Thompson Hall 1+2","venue":"世博桐森酒店","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":132,"track":"算力与AI芯片","name_cn":"创业与投资论坛从算力原点到应用落地的进化征程","name_en":"Qiming Venture Partners - Entrepreneurship and Investment Forum From Silicon Origins to Real-World Implementation: An Evolutionary Odyssey","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心银厅B","location_en":"Expo Center Silver Hall B","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":133,"track":"教育与人才发展","name_cn":"让孩子未来驾驭AI青少年人工智能教育论坛","name_en":"Youth Artificial Intelligence Education Development Forum","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心515会议室","location_en":"Expo Center Conference Room 515","venue":"世博中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":134,"track":"大模型与AI基础","name_cn":"Agent安全运营新范式创新论坛","name_en":"Al+Security Conference: ALL IN Al AGENT","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 9","venue":"世博展览馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":135,"track":"大模型与AI基础","name_cn":"如何驾驭企业级Agent论坛","name_en":"How to Harness Enterprise-Grade Agents Forum","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room 619","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":136,"track":"产业与工业智能化","name_cn":"智启新金融:全球视野下的AI转型之路论坛","name_en":"Reimagining Finance Through Al: A Global Transformation Perspective","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心430会议室","location_en":"Expo Center Conference Room 430","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":137,"track":"内容创意与AIGC","name_cn":"AI重构增长:从内容博弈到系统性变革Al+广告营销创新论坛","name_en":"SHAI Forum Al-Driven Growth: From Content Game to Systemic Shift","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"西岸国际会展中心2号厅A","location_en":"West Bund International Convention and Exhibition Center Hall 2A","venue":"西岸国际会展中心","track_tag":"内容创意","track_direction":"AIGC内容生成、微短剧、影视创作、数字内容、设计创意","track_industry":"传媒、影视、广告、设计、内容创作、游戏、文化产业"},{"id":138,"track":"算力与AI芯片","name_cn":"先进计算网络与算电协同论坛","name_en":"Advanced Computing Network & Compute-Electricity Synergy","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":139,"track":"综合论坛","name_cn":"物理智能创新生态论坛","name_en":"Physical Intelligence Innovation Ecosystem Forum","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"西岸国际会展中心2号厅C","location_en":"West Bund International Convention and Exhibition Center Hall 2C","venue":"西岸国际会展中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":140,"track":"算力与AI芯片","name_cn":"WAICA研讨会·人工智能驱动的量子计算","name_en":"WAICA Workshop: Al Acceleration in Quantum Computing","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"西岸国际会展中心上海厅","location_en":"West Bund International Convention and Exhibition Center 5F- Shanghai Hall","venue":"西岸国际会展中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":141,"track":"算力与AI芯片","name_cn":"WAICA研讨会·天基智能计算前沿","name_en":"WAICA Workshop: Frontiers of Space-Based Intelligent Computing","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"西岸国际会展中心401会议室","location_en":"West Bund International Convention and Exhibition Center Conference Room 401","venue":"西岸国际会展中心","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":142,"track":"综合论坛","name_cn":"WAICA - Main Track Session 3","name_en":"","date":"7月19日","time_start":"14:00","time_end":"17:00","time_raw":"7月19日 14:00-17:00","location_cn":"世博中心431会议室","location_en":"","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":143,"track":"产业与工业智能化","name_cn":"世界模型驱动物理AI从理解到执行论坛","name_en":"World Model-Driven Physical Al Forum: From Understanding to Execution","date":"7月19日","time_start":"14:00","time_end":"17:10","time_raw":"7月19日 14:00-17:10","location_cn":"世博中心银厅C+D","location_en":"Expo Center Silver Hall C+D","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":144,"track":"大模型与AI基础","name_cn":"面向AI时代的数据存储架构创新论坛","name_en":"Data Storage Architecture Innovation for the Al Era Forum","date":"7月19日","time_start":"14:00","time_end":"17:30","time_raw":"7月19日 14:00-17:30","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room 616","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":145,"track":"综合论坛","name_cn":"人工智能高质量语料生态论坛","name_en":"GOMAX LAB High-Quality Al Corpora Ecosystem Forum","date":"7月19日","time_start":"14:00","time_end":"17:30","time_raw":"7月19日 14:00-17:30","location_cn":"世博中心银厅A","location_en":"Expo Center Silver Hall A","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":146,"track":"教育与人才发展","name_cn":"WAIC UP!2026——青年观察家·思享会","name_en":"WAIC UP! 2026 Youth Observer Ideas Sharing Session","date":"7月19日","time_start":"13:30","time_end":"21:30","time_raw":"7月19日 13:30-21:30","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":147,"track":"产业与工业智能化","name_cn":"人工智能与产业绿色低碳转型创新发展论坛","name_en":"\"Al + Green and Low-Carbon Transformation\" Innovation and Development Forum","date":"7月19日","time_start":"14:00","time_end":"17:30","time_raw":"7月19日 14:00-17:30","location_cn":"世博展览馆1B会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1B","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":148,"track":"金融与科技投资","name_cn":"共建全球科技金融伙伴新生态投融资论坛","name_en":"Co-creating a New Global Ecosystem for Technology-Finance Partnerships-CICC Investment and Financing Forum","date":"7月19日","time_start":"14:00","time_end":"18:00","time_raw":"7月19日 14:00-18:00","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"金融投资","track_direction":"AI投融资、金融科技、企业家生态、产业资本、硬科技投资","track_industry":"银行、证券、保险、创投、PE/VC、金融科技"},{"id":149,"track":"算力与AI芯片","name_cn":"算力基座进化与千行百业智能重塑论坛","name_en":"Evolved Computing Infrastructure, Industry-Wide Intelligent Reinvention","date":"7月19日","time_start":"14:30","time_end":"17:00","time_raw":"7月19日 14:30-17:00","location_cn":"世博滨江酒店四季厅","location_en":"Expo Riverside Hotel Four Seasons Hall","venue":"世博滨江酒店","track_tag":"基础设施","track_direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","track_industry":"半导体、芯片、云计算、IDC、通信设备、数据中心"},{"id":150,"track":"综合论坛","name_cn":"WAIC·思想者论坛俞勇专场","name_en":"WAIC Thought Leaders Forum Prof.YuYong","date":"7月19日","time_start":"16:00","time_end":"17:00","time_raw":"7月19日 16:00-17:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":151,"track":"综合论坛","name_cn":"WAIC·思想者论坛李开复专场","name_en":"WAIC Thought Leaders Forum -Mr.Kai-Fu Lee","date":"7月20日","time_start":"09:00","time_end":"10:00","time_raw":"7月20日 09:00-10:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":152,"track":"综合论坛","name_cn":"政务智能创新论坛","name_en":"Government Intelligence Innovation Forum","date":"7月20日","time_start":"09:00","time_end":"11:30","time_raw":"7月20日 09:00-11:30","location_cn":"世博展览馆2号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 2","venue":"世博展览馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":153,"track":"教育与人才发展","name_cn":"未来青年科技创新论坛","name_en":"Future Youth Science and Technology Innovation Forum","date":"7月20日","time_start":"09:00","time_end":"11:30","time_raw":"7月20日 09:00-11:30","location_cn":"世博展览馆1B会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1B","venue":"世博展览馆","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":154,"track":"产业与工业智能化","name_cn":"Al for SME人工智能赋能中小企业高质量发展论坛","name_en":"Al for SME - Artificial Intelligence Empowerment for High-Quality Development of SME Forum","date":"7月20日","time_start":"09:30","time_end":"12:00","time_raw":"7月20日 09:30-12:00","location_cn":"世博中心619会议室","location_en":"Expo Center Conference Room619","venue":"世博中心","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":155,"track":"综合论坛","name_cn":"人工智能法治论坛","name_en":"Al Rule of Law Forum","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心蓝厅","location_en":"Expo Center Blue Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":156,"track":"内容创意与AIGC","name_cn":"世界模型驱动下的AI影视生产力新范式论坛","name_en":"World Models Driving a New Paradigm for Al Filmmaking","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博展览馆1A会议室","location_en":"Expo Exhibition and Convention Center Conference Room 1A","venue":"世博展览馆","track_tag":"内容创意","track_direction":"AIGC内容生成、微短剧、影视创作、数字内容、设计创意","track_industry":"传媒、影视、广告、设计、内容创作、游戏、文化产业"},{"id":157,"track":"综合论坛","name_cn":"高质量数据集与AI编程实践创新论坛","name_en":"High-Quality Dataset and Al Programming Innovation Forum","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心617会议室","location_en":"Expo Center Conference Room 617","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":158,"track":"大模型与AI基础","name_cn":"AI原生智慧消防论坛","name_en":"Al-Native Intelligent Fire Safety Forum","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博滨江酒店四季厅","location_en":"Expo Riverside Hotel Four Seasons Hall","venue":"世博滨江酒店","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":159,"track":"产业与工业智能化","name_cn":"用可信AI构建企业新智生产力论坛","name_en":"Trusted Al Builds New Intelligent Productivity for Enterprises","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博展览馆9号会议室","location_en":"Expo Exhibition and Convention Center Conference Room 9","venue":"世博展览馆","track_tag":"产业落地","track_direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","track_industry":"制造业、工业、零售、消费、物流、供应链、中小企业"},{"id":160,"track":"大模型与AI基础","name_cn":"AI驱动东西部协同发展论坛","name_en":"The Guizhou Forum on Al-Driven East-West Collaborative Development","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心620会议室","location_en":"Expo Center Conference Room 620","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":161,"track":"综合论坛","name_cn":"WAICA · Main Track Session 4","name_en":"","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心431会议室","location_en":"","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":162,"track":"综合论坛","name_cn":"WAICA . Main Track Session 5","name_en":"","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心430会议室","location_en":"","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":163,"track":"综合论坛","name_cn":"WAICA Main Track Session 6","name_en":"","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心515会议室","location_en":"","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":164,"track":"机器人与具身智能","name_cn":"WAICA研讨会·具身智能空间交互","name_en":"Spacial Intelligence for Embodied Al","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心518会议室","location_en":"Expo Center Conference Room 518","venue":"世博中心","track_tag":"智能硬件","track_direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","track_industry":"汽车、智能制造、物流、安防、机器人、消费电子"},{"id":165,"track":"教育与人才发展","name_cn":"WAICA·青年菁英交流会","name_en":"WAICA Youth Elite Association","date":"7月20日","time_start":"09:00","time_end":"12:00","time_raw":"7月20日 09:00-12:00","location_cn":"世博中心616会议室","location_en":"Expo Center Conference Room 616","venue":"世博中心","track_tag":"人才培养","track_direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","track_industry":"教育、培训、人力资源、高校、研究机构"},{"id":166,"track":"大模型与AI基础","name_cn":"Token涌现万物生长论坛","name_en":"INFINIGENCE Forum: Tokens Emerge, Intelligence Grows","date":"7月20日","time_start":"09:00","time_end":"12:10","time_raw":"7月20日 09:00-12:10","location_cn":"世博中心金厅C","location_en":"Expo Center Gold Hall C","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":167,"track":"大模型与AI基础","name_cn":"企业级Agent的进化与商业落地论坛","name_en":"The Evolution and Business Adoption of CLOOPEN Enterprise AI Agents","date":"7月20日","time_start":"09:30","time_end":"12:00","time_raw":"7月20日 09:30-12:00","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room 517","venue":"世博中心","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":168,"track":"综合论坛","name_cn":"WAIC思想者论坛郭毅可专场","name_en":"WAIC Thought Leaders Forum-Prof.GuoYike","date":"7月20日","time_start":"11:00","time_end":"12:00","time_raw":"7月20日 11:00-12:00","location_cn":"世博中心红厅","location_en":"Expo Center Red Hall","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":169,"track":"综合论坛","name_cn":"SCDI·国际AI城市生态论坛","name_en":"Earth Intelligence Drives Al Cities-2026 International Al Cities Ecology Forum","date":"7月20日","time_start":"13:30","time_end":"17:00","time_raw":"7月20日 13:30-17:00","location_cn":"世博中心517会议室","location_en":"Expo Center Conference Room517","venue":"世博中心","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":170,"track":"大模型与AI基础","name_cn":"AI原生驱动工业全域升级应用实践研讨会","name_en":"Seminar on Practical Applications of Al-Native Driven All-Round Industrial Upgrade New Industrialization","date":"7月17日","time_start":"14:00","time_end":"17:20","time_raw":"7月17日 14:00-17:20","location_cn":"上海市浦东新区花木路1388号浦东嘉里大酒店","location_en":"Kerry Hotel Pudong, Shanghai No.1388 Huamu Road, Pudong New Area, Shanghai","venue":"其他场馆","track_tag":"技术前沿","track_direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","track_industry":"互联网、科技公司、软件、所有数字化转型行业"},{"id":171,"track":"综合论坛","name_cn":"院士看洋山","name_en":"Academicians Visit Yangshan","date":"7月18日","time_start":"13:00","time_end":"18:00","time_raw":"7月18日 13:00-18:00","location_cn":"上海临港锦江国际酒店观潮厅","location_en":"Shanghai Lingang Jinjiang International Hotel Guanchao Hall","venue":"其他场馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":172,"track":"综合论坛","name_cn":"AI智联低空，链启长三角新篇论坛","name_en":"Al Empowers Low-Altitude Connectivity, Forging a New Yangtze River Delta Landscape","date":"7月18日","time_start":"15:00","time_end":"17:10","time_raw":"7月18日 15:00-17:10","location_cn":"上海市长宁区云纱路188号希尔顿酒店一楼大宴会厅","location_en":"Grand Ballroom, Hilton Hotel,188 Yun Sha Road, Changning District,Shanghai","venue":"其他场馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":173,"track":"综合论坛","name_cn":"2026中国·AI盛典","name_en":"2026 China · Al Gala","date":"7月18日","time_start":"19:30","time_end":"21:30","time_raw":"7月18日 19:30-21:30","location_cn":"上海市徐汇区龙腾大道2350号西岸穹顶艺术中心","location_en":"WEST BUND DOME,No. 2350 Longteng Avenue, Xuhui District, Shanghai","venue":"其他场馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":174,"track":"综合论坛","name_cn":"浦江生态论坛","name_en":"2026 WAIC Pujiang Ecological Forum","date":"7月19日","time_start":"14:00","time_end":"17:30","time_raw":"7月19日 14:00-17:30","location_cn":"上海市徐汇区龙兰路801号上海人工智能实验室新园区","location_en":"Shanghai Artificial Intelligence Laboratory New Campus No.801 Longlan Road, Xuhui District,Shanghai, China","venue":"其他场馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"},{"id":175,"track":"综合论坛","name_cn":"中国年度AI人物·巅峰对话","name_en":"China Annual Al Figures · Summit Dialogue","date":"7月19日","time_start":"14:00","time_end":"16:00","time_raw":"7月19日 14:00-16:00","location_cn":"上海市徐汇区龙腾大道2350号西岸穹顶艺术中心","location_en":"WEST BUND DOME,No. 2350 Longteng Avenue, Xuhui District, Shanghai","venue":"其他场馆","track_tag":"综合生态","track_direction":"综合性主题、跨领域交流、生态合作、企业家峰会","track_industry":"全行业、企业管理层、生态合作伙伴"}],"tracks":{"综合论坛":{"rank":1,"count":45,"pct":"25.7%","tag":"综合生态","direction":"综合性主题、跨领域交流、生态合作、企业家峰会","industry":"全行业、企业管理层、生态合作伙伴","rep":"WAIC企业家论坛、AI创新者思享汇、企业智能体产业论坛"},"大模型与AI基础":{"rank":2,"count":35,"pct":"20.0%","tag":"技术前沿","direction":"大模型技术、Agent智能体、多模态、认知智能、基础模型创新","industry":"互联网、科技公司、软件、所有数字化转型行业","rep":"主论坛、AI未来发展论坛、从大模型到智能体论坛"},"产业与工业智能化":{"rank":3,"count":32,"pct":"18.3%","tag":"产业落地","direction":"工业AI、智能制造、企业数字化、产业升级、供应链智能化","industry":"制造业、工业、零售、消费、物流、供应链、中小企业","rep":"物理AI重塑智能制造、工业AI创新论坛、模数同频智造共振"},"算力与AI芯片":{"rank":4,"count":22,"pct":"12.6%","tag":"基础设施","direction":"AI芯片、算力网络、智算中心、光计算、算电协同、RISC-V","industry":"半导体、芯片、云计算、IDC、通信设备、数据中心","rep":"智算超节点与算电协同、RISC-V与AI融合、光计算与光互连"},"教育与人才发展":{"rank":5,"count":9,"pct":"5.1%","tag":"人才培养","direction":"AI+教育、人才培养、青年创新、高校合作、职业教育","industry":"教育、培训、人力资源、高校、研究机构","rep":"人工智能青年先锋对话、\"人机共育·重塑大学\"教育论坛"},"治理标准与政策":{"rank":6,"count":7,"pct":"4.0%","tag":"治理合规","direction":"AI治理、标准制定、法律法规、伦理安全、政策对话","industry":"法律、合规、政务、公共服务、标准化机构、政府部门","rep":"人工智能标准国际化论坛、人工智能规则全球对话论坛"},"前沿科技与探索":{"rank":7,"count":5,"pct":"2.9%","tag":"前沿科研","direction":"量子科技、材料科学、数学AI、基础研究、科学智能","industry":"科研院所、新材料、量子计算、航空航天、基础研究","rep":"数学与人工智能论坛、人工智能赋能材料科学论坛"},"机器人与具身智能":{"rank":8,"count":5,"pct":"2.9%","tag":"智能硬件","direction":"具身智能、人形机器人、智能硬件、自动驾驶、感知交互","industry":"汽车、智能制造、物流、安防、机器人、消费电子","rep":"具身智能前沿趋势与产业生态论坛"},"金融与科技投资":{"rank":9,"count":4,"pct":"2.3%","tag":"金融投资","direction":"AI投融资、金融科技、企业家生态、产业资本、硬科技投资","industry":"银行、证券、保险、创投、PE/VC、金融科技","rep":"AI驱动经济前沿论坛、智见AI合创未来投融资论坛"},"内容创意与AIGC":{"rank":10,"count":4,"pct":"2.3%","tag":"内容创意","direction":"AIGC内容生成、微短剧、影视创作、数字内容、设计创意","industry":"传媒、影视、广告、设计、内容创作、游戏、文化产业","rep":"从量产到精品·AI赋能影视内容创作新生态论坛"},"能源与可持续发展":{"rank":11,"count":3,"pct":"1.7%","tag":"绿色能源","direction":"AI+能源、双碳、绿色智能、核能、海洋经济、船舶工业","industry":"能源、电力、核能、环保、船舶、海洋工程","rep":"AI与先进核能共筑可持续智能未来、领深蓝AI+船海产业论坛"},"医疗与生命科学":{"rank":12,"count":3,"pct":"1.7%","tag":"医疗健康","direction":"AI制药、智慧医疗、生命科学、健康管理、医学影像","industry":"医药、医疗设备、医院、生物科技、健康管理","rep":"AI赋能生命健康新范式论坛"},"女性与多元发展":{"rank":13,"count":1,"pct":"0.6%","tag":"多元发展","direction":"女性科技力量、多元包容、领导力发展、性别平等","industry":"全行业（关注多元包容与女性领导力）","rep":"AI女性论坛"}},"stats":{"total":175,"days":4,"venues":7,"tracks":13},"venues":{"世博中心":{"lat":31.1865,"lng":121.4887,"address":"浦东新区世博大道1500号","color":"#00f0ff"},"世博展览馆":{"lat":31.1845,"lng":121.4853,"address":"浦东新区国展路1099号","color":"#fb923c"},"西岸国际会展中心":{"lat":31.171,"lng":121.453,"address":"徐汇区龙耀路7号","color":"#a855f7"},"世博桐森酒店":{"lat":31.1855,"lng":121.4905,"address":"浦东新区世博大道1399号","color":"#4ade80"},"其他场馆":{"lat":31.23,"lng":121.5,"address":"各分散场馆","color":"#f87171"},"世博滨江酒店":{"lat":31.1863,"lng":121.4869,"address":"浦东新区世博大道1588号","color":"#fbbf24"},"张江科学会堂":{"lat":31.187,"lng":121.6143,"address":"浦东新区海科路1393号","color":"#2dd4bf"}},"otherVenueCoords":{"8":{"lat":31.278,"lng":121.538,"name":"复兴岛复兴云厅"},"26":{"lat":31.175,"lng":121.442,"name":"上海人工智能实验室"},"170":{"lat":31.22,"lng":121.547,"name":"浦东嘉里大酒店"},"171":{"lat":30.8795,"lng":121.9238,"name":"临港锦江国际酒店"},"172":{"lat":31.21,"lng":121.42,"name":"希尔顿酒店"},"173":{"lat":31.1632,"lng":121.4646,"name":"西岸穹顶艺术中心"},"174":{"lat":31.175,"lng":121.442,"name":"上海人工智能实验室"},"175":{"lat":31.1632,"lng":121.4646,"name":"西岸穹顶艺术中心"}},"trackColors":{"综合论坛":"#00f0ff","大模型与AI基础":"#a855f7","产业与工业智能化":"#fb923c","算力与AI芯片":"#4ade80","教育与人才发展":"#facc15","治理标准与政策":"#3b82f6","前沿科技与探索":"#ec4899","机器人与具身智能":"#f87171","金融与科技投资":"#fbbf24","内容创意与AIGC":"#e879f9","能源与可持续发展":"#2dd4bf","医疗与生命科学":"#fb7185","女性与多元发展":"#c084fc"}};
+
+const events = APP_DATA.events;
+const tracks = APP_DATA.tracks;
+const venues = APP_DATA.venues;
+const otherVenueCoords = APP_DATA.otherVenueCoords;
+const trackColors = APP_DATA.trackColors;
+
+// ===== STATE =====
+let currentView = 'timeline';
+let currentDateFilter = 'all';
+let activeTracks = new Set();
+let searchQuery = '';
+let favorites = new Set(JSON.parse(localStorage.getItem('waic_favs') || '[]'));
+let leafletMap = null;
+let mapInitialized = false;
+
+// ===== UTILS =====
+function getTrackColor(track) { return trackColors[track] || '#888'; }
+
+function escapeHtml(s) {
+  if(!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function timeToMinutes(t) {
+  if(!t) return 0;
+  const parts = t.split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
+
+function getEventCoords(event) {
+  if(event.venue === '其他场馆' && otherVenueCoords[event.id]) {
+    return otherVenueCoords[event.id];
+  }
+  const v = venues[event.venue];
+  return v ? {lat: v.lat, lng: v.lng, name: event.venue} : null;
+}
+
+// ===== FILTERING =====
+function getFilteredEvents() {
+  return events.filter(e => {
+    if(currentDateFilter !== 'all' && e.date !== currentDateFilter) return false;
+    if(activeTracks.size > 0 && !activeTracks.has(e.track)) return false;
+    if(searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const haystack = (e.name_cn + ' ' + e.name_en + ' ' + e.track + ' ' + e.venue + ' ' + e.location_cn).toLowerCase();
+      if(!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// ===== RENDER: TIMELINE =====
+function renderTimeline() {
+  const filtered = getFilteredEvents();
+  const container = document.getElementById('timelineContent');
+  document.getElementById('timelineCount').textContent = `共 ${filtered.length} 场`;
+
+  if(filtered.length === 0) {
+    container.innerHTML = '<div class="glass p-8 text-center" style="color:var(--text-secondary)">没有找到匹配的活动，试试调整筛选条件</div>';
+    return;
+  }
+
+  // Group by date
+  const dates = ['7月17日','7月18日','7月19日','7月20日'];
+  let html = '';
+
+  dates.forEach(date => {
+    const dayEvents = filtered.filter(e => e.date === date).sort((a,b) => {
+      return timeToMinutes(a.time_start) - timeToMinutes(b.time_start);
+    });
+    if(dayEvents.length === 0) return;
+
+    html += `<div class="mb-8">`;
+    html += `<div class="flex items-center gap-3 mb-4">
+      <div class="font-orbitron text-lg font-bold" style="color:var(--accent-cyan)">${date.replace('7月','7/').replace('日','')}</div>
+      <div class="h-px flex-1" style="background:linear-gradient(to right,rgba(0,240,255,0.2),transparent)"></div>
+      <span class="text-sm" style="color:var(--text-secondary)">${dayEvents.length} 场</span>
+    </div>`;
+
+    // Render events as cards
+    html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">';
+    dayEvents.forEach(e => {
+      const color = getTrackColor(e.track);
+      const isFav = favorites.has(e.id);
+      html += `<div class="event-card glass glass-hover p-4" style="--card-color:${color}" onclick="showEventDetail(${e.id})">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${color};border-radius:2px"></div>
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="font-orbitron text-sm font-bold" style="color:${color}">${e.time_start || ''}</span>
+            <span class="text-xs" style="color:var(--text-secondary)">${e.time_start && e.time_end ? '→ ' + e.time_end : ''}</span>
+          </div>
+          <span class="fav-btn ${isFav ? 'fav-active' : ''}" onclick="event.stopPropagation();toggleFav(${e.id})" style="color:${isFav ? '#fbbf24' : 'var(--text-secondary)'}">
+            <svg class="w-4 h-4" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+          </span>
+        </div>
+        <div class="text-sm font-medium mb-2" style="color:var(--text-primary);line-height:1.4">${escapeHtml(e.name_cn)}</div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="track-badge" style="background:${color}1a;color:${color};border:1px solid ${color}33">${e.track}</span>
+          <span class="text-xs" style="color:var(--text-secondary)">📍 ${escapeHtml(e.venue)}</span>
+        </div>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+
+  container.innerHTML = html;
+}
+
+// ===== RENDER: MAP =====
+let mapResizeObserver = null;
+
+function renderMap() {
+  if(!mapInitialized) {
+    // Delay initialization to ensure container has correct dimensions after display:block
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        initMap();
+      });
+    });
+  } else {
+    if(leafletMap) leafletMap.invalidateSize();
+  }
+}
+
+function initMap() {
+  if(mapInitialized) return;
+  const mapContainer = document.getElementById('mapView');
+  if(!mapContainer || mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+    setTimeout(() => initMap(), 100);
+    return;
+  }
+
+  leafletMap = L.map('mapView', {
+    zoomControl: true, attributionControl: false, scrollWheelZoom: true,
+    fadeAnimation: true, zoomAnimation: true, markerZoomAnimation: true
+  }).setView([31.19, 121.50], 12);
+
+  // Primary base layer: Amap (Gaode) road map - more reliable in mainland China
+  const tileLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+    maxZoom: 18, subdomains: '1234', keepBuffer: 2, updateWhenIdle: true,
+    errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+  }).addTo(leafletMap);
+
+  // If Amap tile fails, try OpenStreetMap as a last resort
+  tileLayer.on('tileerror', function(ev) {
+    const tile = ev.tile;
+    if(!tile || tile._fallbackApplied) return;
+    tile._fallbackApplied = true;
+    const match = tile.src.match(/x=(\d+)&y=(\d+)&z=(\d+)/);
+    if(match) {
+      const [, x, y, z] = match;
+      tile.src = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    }
+  });
+  mapInitialized = true;
+
+    // Add venue markers
+    const venueGroups = {};
+    events.forEach(e => {
+      if(!venueGroups[e.venue]) venueGroups[e.venue] = [];
+      venueGroups[e.venue].push(e);
+    });
+
+    const allBounds = [];
+
+    Object.entries(venueGroups).forEach(([venueName, evts]) => {
+      const v = venues[venueName];
+      if(!v) return;
+      allBounds.push([v.lat, v.lng]);
+
+      const size = Math.min(48, 24 + evts.length * 0.3);
+      // Short venue name for label
+      const shortName = venueName.length > 6 ? venueName.slice(0,5)+'…' : venueName;
+      const icon = L.divIcon({
+        className:'custom-pin',
+        html:`<div style="position:relative"><div class="pin-icon" style="background:${v.color};width:${size}px;height:${size}px"><span class="pin-text">${evts.length}</span></div><div class="venue-label">${shortName}</div></div>`,
+        iconSize:[size,size], iconAnchor:[size/2,size], popupAnchor:[0,-size]
+      });
+
+      const marker = L.marker([v.lat,v.lng],{icon}).addTo(leafletMap);
+      const eventList = evts.sort((a,b)=>timeToMinutes(a.time_start)-timeToMinutes(b.time_start)).slice(0,8).map(e =>
+        `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" onclick="showEventDetail(${e.id})">
+          <div style="font-size:12px;color:${getTrackColor(e.track)};font-weight:600">${e.time_start} - ${e.time_end}</div>
+          <div style="font-size:13px;color:#e8eef7;margin-top:2px">${escapeHtml(e.name_cn)}</div>
+        </div>`
+      ).join('');
+      const moreText = evts.length > 8 ? `<div style="text-align:center;padding:6px;color:#8b95a8;font-size:12px">还有 ${evts.length-8} 场活动...</div>` : '';
+
+      marker.bindPopup(`
+        <div style="min-width:260px;max-width:300px">
+          <div style="font-size:16px;font-weight:700;color:${v.color};margin-bottom:2px">${venueName}</div>
+          <div style="font-size:11px;color:#8b95a8;margin-bottom:8px">${escapeHtml(v.address)}</div>
+          <div style="font-size:12px;color:#8b95a8;margin-bottom:6px">共 ${evts.length} 场活动</div>
+          ${eventList}${moreText}
+        </div>
+      `, {maxWidth:320});
+    });
+
+    // Add other venue markers
+    Object.entries(otherVenueCoords).forEach(([id, coord]) => {
+      const event = events.find(e => e.id === parseInt(id));
+      if(!event) return;
+      allBounds.push([coord.lat, coord.lng]);
+
+      const color = getTrackColor(event.track);
+      const shortName = coord.name.length > 6 ? coord.name.slice(0,5)+'…' : coord.name;
+      const icon = L.divIcon({
+        className:'custom-pin',
+        html:`<div style="position:relative"><div class="pin-icon" style="background:${color};width:28px;height:28px"><span class="pin-text" style="font-size:10px">1</span></div><div class="venue-label">${shortName}</div></div>`,
+        iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-28]
+      });
+
+      const marker = L.marker([coord.lat,coord.lng],{icon}).addTo(leafletMap);
+      marker.bindPopup(`
+        <div style="min-width:240px">
+          <div style="font-size:15px;font-weight:700;color:${color};margin-bottom:2px">${escapeHtml(coord.name)}</div>
+          <div style="font-size:11px;color:#8b95a8;margin-bottom:8px">${escapeHtml(event.location_cn)}</div>
+          <div style="padding:6px 0;cursor:pointer" onclick="showEventDetail(${event.id})">
+            <div style="font-size:12px;color:${color};font-weight:600">${event.time_start} - ${event.time_end}</div>
+            <div style="font-size:13px;color:#e8eef7;margin-top:2px">${escapeHtml(event.name_cn)}</div>
+          </div>
+        </div>
+      `, {maxWidth:280});
+    });
+
+    // Fit bounds to show all markers
+    if(allBounds.length > 0) {
+      leafletMap.fitBounds(allBounds, {padding:[50,50], maxZoom:14});
+    }
+
+    // ResizeObserver to catch container size changes (mobile address bar, orientation change, etc.)
+    if(mapResizeObserver) mapResizeObserver.disconnect();
+    mapResizeObserver = new ResizeObserver(() => {
+      if(leafletMap) leafletMap.invalidateSize();
+    });
+    mapResizeObserver.observe(mapContainer);
+
+  // One final invalidateSize after layout settles
+  setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 300);
+  // 暴雨应急：地图初始化后加载避雨点
+  loadShelters();
+}
+
+// ===== RENDER: TRACKS =====
+function renderTracks() {
+  const container = document.getElementById('tracksContent');
+  let html = '';
+  Object.entries(tracks).sort((a,b) => a[1].rank - b[1].rank).forEach(([name, info]) => {
+    const color = getTrackColor(name);
+    const trackEvents = events.filter(e => e.track === name);
+    html += `<div class="glass glass-hover p-5 cursor-pointer event-card" style="--card-color:${color}" onclick="filterByTrack('${name.replace(/'/g,"\\'")}')">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${color};border-radius:2px"></div>
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <div class="text-base font-bold mb-1" style="color:${color}">${name}</div>
+          <span class="track-badge" style="background:${color}1a;color:${color};border:1px solid ${color}33">${info.tag}</span>
+        </div>
+        <div class="text-right">
+          <div class="font-orbitron text-2xl font-bold" style="color:${color}">${info.count}</div>
+          <div class="text-xs" style="color:var(--text-secondary)">场</div>
+        </div>
+      </div>
+      <div class="text-xs mb-2" style="color:var(--text-secondary);line-height:1.5">
+        <span style="color:var(--text-primary)">核心方向：</span>${escapeHtml(info.direction)}
+      </div>
+      <div class="text-xs" style="color:var(--text-secondary);line-height:1.5">
+        <span style="color:var(--text-primary)">适合行业：</span>${escapeHtml(info.industry)}
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ===== RENDER: SCHEDULE =====
+function renderSchedule() {
+  const container = document.getElementById('scheduleContent');
+  const favEvents = events.filter(e => favorites.has(e.id)).sort((a,b) => {
+    if(a.date !== b.date) return a.date.localeCompare(b.date);
+    return timeToMinutes(a.time_start) - timeToMinutes(b.time_start);
+  });
+  document.getElementById('scheduleCount').textContent = favEvents.length > 0 ? `已收藏 ${favEvents.length} 场` : '';
+  updateFavBadge();
+
+  if(favEvents.length === 0) {
+    container.innerHTML = '<div class="glass p-12 text-center"><div class="text-5xl mb-4">⭐</div><div style="color:var(--text-secondary)">还没有收藏任何活动</div><div class="text-sm mt-2" style="color:var(--text-secondary)">在时间轴中点击星标即可收藏</div></div>';
+    return;
+  }
+
+  const dates = ['7月17日','7月18日','7月19日','7月20日'];
+  let html = '';
+  dates.forEach(date => {
+    const dayEvents = favEvents.filter(e => e.date === date);
+    if(dayEvents.length === 0) return;
+    html += `<div class="mb-6">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="font-orbitron text-lg font-bold" style="color:var(--accent-cyan)">${date.replace('7月','7/').replace('日','')}</div>
+        <div class="h-px flex-1" style="background:linear-gradient(to right,rgba(0,240,255,0.2),transparent)"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+    dayEvents.forEach(e => {
+      const color = getTrackColor(e.track);
+      html += `<div class="event-card glass glass-hover p-4" onclick="showEventDetail(${e.id})">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${color};border-radius:2px"></div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="font-orbitron text-sm font-bold" style="color:${color}">${e.time_start}</span>
+          <span class="text-xs" style="color:var(--text-secondary)">→ ${e.time_end}</span>
+        </div>
+        <div class="text-sm font-medium mb-2">${escapeHtml(e.name_cn)}</div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="track-badge" style="background:${color}1a;color:${color};border:1px solid ${color}33">${e.track}</span>
+          <span class="text-xs" style="color:var(--text-secondary)">📍 ${escapeHtml(e.venue)}</span>
+        </div>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// ===== EVENT DETAIL MODAL =====
+function showEventDetail(id) {
+  const e = events.find(ev => ev.id === id);
+  if(!e) return;
+  const color = getTrackColor(e.track);
+  const isFav = favorites.has(e.id);
+  const coords = getEventCoords(e);
+  const v = venues[e.venue];
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="flex items-start justify-between mb-4">
+      <span class="track-badge" style="background:${color}1a;color:${color};border:1px solid ${color}33;font-size:12px;padding:4px 12px">${e.track}</span>
+      <button onclick="closeModal()" style="color:var(--text-secondary);cursor:pointer;background:none;border:none;padding:4px">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h3 class="text-lg font-bold mb-1" style="line-height:1.4">${escapeHtml(e.name_cn)}</h3>
+    ${e.name_en ? `<p class="text-sm mb-4" style="color:var(--text-secondary);line-height:1.4">${escapeHtml(e.name_en)}</p>` : '<div class="mb-4"></div>'}
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="glass p-3" style="border-radius:10px">
+        <div class="text-xs mb-1" style="color:var(--text-secondary)">日期</div>
+        <div class="text-sm font-medium" style="color:${color}">${escapeHtml(e.date)}</div>
+      </div>
+      <div class="glass p-3" style="border-radius:10px">
+        <div class="text-xs mb-1" style="color:var(--text-secondary)">时间</div>
+        <div class="text-sm font-medium font-orbitron" style="color:${color}">${e.time_start} - ${e.time_end}</div>
+      </div>
+      <div class="glass p-3" style="border-radius:10px">
+        <div class="text-xs mb-1" style="color:var(--text-secondary)">场馆</div>
+        <div class="text-sm font-medium">${escapeHtml(e.venue)}</div>
+      </div>
+      <div class="glass p-3" style="border-radius:10px">
+        <div class="text-xs mb-1" style="color:var(--text-secondary)">具体地点</div>
+        <div class="text-sm font-medium">${escapeHtml(e.location_cn)}</div>
+      </div>
+    </div>
+
+    ${e.track_direction ? `<div class="mb-3 p-3 glass" style="border-radius:10px">
+      <div class="text-xs mb-1" style="color:var(--text-secondary)">核心方向</div>
+      <div class="text-sm" style="line-height:1.5">${escapeHtml(e.track_direction)}</div>
+    </div>` : ''}
+
+    ${e.track_industry ? `<div class="mb-4 p-3 glass" style="border-radius:10px">
+      <div class="text-xs mb-1" style="color:var(--text-secondary)">适合行业</div>
+      <div class="text-sm" style="line-height:1.5">${escapeHtml(e.track_industry)}</div>
+    </div>` : ''}
+
+    <div class="flex gap-3 flex-col sm:flex-row">
+      <button onclick="toggleFav(${e.id});showEventDetail(${e.id})" class="py-2.5 rounded-xl font-medium text-sm transition-all" style="background:${isFav ? 'rgba(251,191,36,0.12)':'rgba(255,255,255,0.04)'};border:1px solid ${isFav ? 'rgba(251,191,36,0.3)':'rgba(255,255,255,0.08)'};color:${isFav ? '#fbbf24':'var(--text-primary)'};cursor:pointer">
+        ${isFav ? '★ 已收藏' : '☆ 收藏到日程'}
+      </button>
+      ${coords ? `<button onclick="showOnMap(${coords.lat},${coords.lng})" class="py-2.5 rounded-xl font-medium text-sm transition-all" style="background:rgba(0,240,255,0.08);border:1px solid rgba(0,240,255,0.25);color:var(--accent-cyan);cursor:pointer">📍 在地图上查看</button>` : ''}
+    </div>
+  `;
+  document.getElementById('eventModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('eventModal').classList.remove('active');
+}
+
+function showOnMap(lat,lng) {
+  closeModal();
+  switchView('map');
+  // Wait for view transition, then invalidate size and fly to location
+  setTimeout(() => {
+    if(leafletMap) {
+      leafletMap.invalidateSize();
+      setTimeout(() => {
+        leafletMap.flyTo([lat,lng], 15, {duration:0.8});
+      }, 300);
+    } else {
+      // Map not yet initialized, wait longer
+      setTimeout(() => {
+        if(leafletMap) {
+          leafletMap.invalidateSize();
+          leafletMap.flyTo([lat,lng], 15, {duration:0.8});
+        }
+      }, 500);
+    }
+  }, 400);
+}
+
+// ===== FAVORITES =====
+function toggleFav(id) {
+  if(favorites.has(id)) favorites.delete(id);
+  else favorites.add(id);
+  localStorage.setItem('waic_favs', JSON.stringify([...favorites]));
+  updateFavBadge();
+  if(currentView === 'timeline') renderTimeline();
+  if(currentView === 'schedule') renderSchedule();
+}
+
+function updateFavBadge() {
+  const badge = document.getElementById('favBadge');
+  if(favorites.size > 0) {
+    badge.style.display = 'flex';
+    badge.textContent = favorites.size;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ===== FILTER BY TRACK =====
+function filterByTrack(trackName) {
+  if(activeTracks.has(trackName)) {
+    activeTracks.delete(trackName);
+  } else {
+    activeTracks.add(trackName);
+  }
+  updateTrackFilters();
+  collapseTrackFilter();
+  if(currentView !== 'timeline' && currentView !== 'map') switchView('timeline');
+  else if(currentView === 'timeline') renderTimeline();
+}
+
+function clearTracks() {
+  activeTracks.clear();
+  updateTrackFilters();
+  collapseTrackFilter();
+  if(currentView === 'timeline') renderTimeline();
+}
+
+// ===== VIEW SWITCHING =====
+function switchView(viewName) {
+  currentView = viewName;
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+  document.querySelectorAll('.view-section').forEach(section => {
+    section.classList.remove('active', 'no-anim');
+  });
+  const viewMap = {timeline:'timelineView', map:'mapViewSection', tracks:'tracksView', schedule:'scheduleView'};
+  const targetSection = document.getElementById(viewMap[viewName]);
+  
+  if(viewName === 'map') {
+    // Disable animation for map view to prevent dimension changes during init
+    targetSection.classList.add('no-anim');
+    targetSection.classList.add('active');
+    renderMap();
+    // Extra invalidateSize after layout settles
+    setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500);
+  } else {
+    targetSection.classList.add('active');
+  }
+  if(viewName === 'tracks') renderTracks();
+  if(viewName === 'schedule') renderSchedule();
+  if(viewName === 'timeline') renderTimeline();
+}
+
+// ===== TRACK FILTERS =====
+function toggleTrackFilter() {
+  const toggle = document.getElementById('trackToggle');
+  const body = document.getElementById('trackFilterBody');
+  toggle.classList.toggle('expanded');
+  body.classList.toggle('expanded');
+}
+
+function collapseTrackFilter() {
+  const toggle = document.getElementById('trackToggle');
+  const body = document.getElementById('trackFilterBody');
+  if (toggle) toggle.classList.remove('expanded');
+  if (body) body.classList.remove('expanded');
+}
+
+function updateTrackFilters() {
+  const container = document.getElementById('trackFilters');
+  let html = '';
+  // "全部" chip to clear all filters
+  const allActive = activeTracks.size === 0;
+  html += `<div class="track-chip ${allActive ? 'active' : ''}" style="--chip-color:#00f0ff" onclick="clearTracks()">
+    <span class="track-dot" style="background:#00f0ff;box-shadow:0 0 6px #00f0ff80"></span>
+    <span>全部</span>
+    <span style="opacity:0.6;font-size:10px">${events.length}</span>
+  </div>`;
+  Object.entries(tracks).sort((a,b) => a[1].rank - b[1].rank).forEach(([name, info]) => {
+    const color = getTrackColor(name);
+    const isActive = activeTracks.has(name);
+    html += `<div class="track-chip ${isActive ? 'active' : ''}" style="--chip-color:${color}" onclick="filterByTrack('${name.replace(/'/g,"\\'")}')">
+      <span class="track-dot" style="background:${color};box-shadow:0 0 6px ${color}80"></span>
+      <span>${name}</span>
+      <span style="opacity:0.6;font-size:10px">${info.count}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+
+  // Update mobile toggle status text
+  const statusEl = document.getElementById('trackToggleStatus');
+  if (statusEl) {
+    if (activeTracks.size === 0) {
+      statusEl.textContent = '全部 ' + events.length + ' 场';
+      statusEl.style.color = 'var(--accent-cyan)';
+    } else {
+      const names = Array.from(activeTracks);
+      statusEl.textContent = names.length === 1 ? names[0] : names[0] + ' +' + (names.length - 1);
+      statusEl.style.color = 'var(--accent-pink)';
+    }
+  }
+}
+
+// ===== 暴雨应急：预警层 =====
+let currentWarningLevel = null;
+let weatherPollTimer = null;
+const WEATHER_POLL_INTERVAL = 5 * 60 * 1000;
+
+function fetchWeatherWarning() {
+  fetch('/api/weather')
+    .then(r => r.json())
+    .then(data => {
+      const warnings = normalizeWarnings(data);
+      renderWarningBanner(warnings);
+      checkNewWarning(warnings);
+      renderAgendaAlert();
+    })
+    .catch(err => {
+      console.warn('获取预警失败:', err);
+      // 本地预览 mock（部署到 Netlify 后用真实 API，hostname 不是 localhost 不触发）
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        const mockData = { warning: [{ id:'mock1', title:'上海暴雨橙色预警信号', level:'ORANGE', text:'预计未来3小时内上海将出现强降水，累积降水量可达50毫米以上，请注意防范', pubTime:new Date().toISOString(), typeName:'暴雨' }] };
+        const warnings = normalizeWarnings(mockData);
+        renderWarningBanner(warnings);
+        renderAgendaAlert();
+        return;
+      }
+      const banner = document.getElementById('warningBanner');
+      if (banner) {
+        banner.className = 'warning-banner loading';
+        banner.innerHTML = '<span class="dot"></span><span class="warning-banner-text">预警信息获取失败，点击重试</span>';
+        banner.onclick = fetchWeatherWarning;
+      }
+    });
+}
+
+function normalizeWarnings(data) {
+  const list = data.warning || data.alerts || [];
+  return list.map(w => ({
+    id: w.id || (w.title || '') + (w.pubTime || ''),
+    title: w.title || w.headline || '预警',
+    level: (w.level || (w.color && w.color.code) || '').toUpperCase(),
+    text: w.text || w.description || '',
+    pubTime: w.pubTime || w.issuedTime || '',
+    typeName: w.typeName || (w.eventType && w.eventType.name) || ''
+  }));
+}
+
+function renderWarningBanner(warnings) {
+  const banner = document.getElementById('warningBanner');
+  if (!banner) return;
+  if (!warnings || warnings.length === 0) {
+    banner.className = 'warning-banner safe';
+    currentWarningLevel = null;
+    banner.innerHTML = '<span class="warning-banner-text">当前上海无暴雨预警 · 出行安全</span>';
+    banner.onclick = null;
+    return;
+  }
+  const levelPriority = { RED:4, ORANGE:3, YELLOW:2, BLUE:1 };
+  const top = warnings.reduce((a, b) => (levelPriority[a.level]||0) >= (levelPriority[b.level]||0) ? a : b);
+  currentWarningLevel = top.level;
+  banner.className = 'warning-banner ' + top.level.toLowerCase();
+  const levelText = { RED:'红色', ORANGE:'橙色', YELLOW:'黄色', BLUE:'蓝色' }[top.level] || '';
+  const typeName = top.typeName || '暴雨';
+  banner.innerHTML = '<div><span class="dot"></span><span class="warning-banner-text">上海' + typeName + levelText + '预警</span></div>'
+    + '<div class="warning-banner-detail">' + (top.text || top.title) + '</div>';
+  banner.onclick = () => { if(currentView !== 'map') switchView('map'); };
+}
+
+function checkNewWarning(warnings) {
+  if (!warnings || warnings.length === 0) { localStorage.removeItem('last_warning_id'); return; }
+  const top = warnings[0];
+  const lastId = localStorage.getItem('last_warning_id');
+  if (top.id && top.id !== lastId) {
+    localStorage.setItem('last_warning_id', top.id);
+    showNotification(top);
+  }
+}
+
+function showNotification(warning) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  if (localStorage.getItem('notification_enabled') !== 'true') return;
+  const levelText = { RED:'红色', ORANGE:'橙色', YELLOW:'黄色', BLUE:'蓝色' }[warning.level] || '';
+  try {
+    new Notification(warning.typeName + levelText + '预警', { body: warning.text || warning.title, tag: warning.id });
+  } catch(e) { console.warn('通知失败:', e); }
+}
+
+function requestNotificationPermission() {
+  if (!('Notification' in window)) { alert('您的浏览器不支持通知功能，请保持应用在前台查看预警横幅'); return; }
+  const btn = document.getElementById('notifyBtn');
+  const btnText = document.getElementById('notifyBtnText');
+  if (Notification.permission === 'granted') {
+    localStorage.setItem('notification_enabled', 'true');
+    btn.classList.add('granted'); btnText.textContent = '通知已开启';
+    return;
+  }
+  Notification.requestPermission().then(result => {
+    if (result === 'granted') {
+      localStorage.setItem('notification_enabled', 'true');
+      btn.classList.add('granted'); btnText.textContent = '通知已开启';
+    } else {
+      alert('通知被拒绝，请保持应用在前台查看预警横幅');
+    }
+  });
+}
+
+function restoreNotifyState() {
+  const btn = document.getElementById('notifyBtn');
+  const btnText = document.getElementById('notifyBtnText');
+  if (btn && btnText && 'Notification' in window && Notification.permission === 'granted' && localStorage.getItem('notification_enabled') === 'true') {
+    btn.classList.add('granted'); btnText.textContent = '通知已开启';
+  }
+}
+
+function startWarningPolling() {
+  fetchWeatherWarning();
+  restoreNotifyState();
+  if (weatherPollTimer) clearInterval(weatherPollTimer);
+  weatherPollTimer = setInterval(fetchWeatherWarning, WEATHER_POLL_INTERVAL);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) fetchWeatherWarning(); });
+}
+
+// ===== 暴雨应急：积水层 =====
+let waterloggingReports = [];
+let waterloggingMarkers = [];
+let reportSeverity = null;
+let reportLocation = null;
+let reportPhotoData = null;
+
+function loadWaterloggingReports() {
+  fetch('/api/waterlogging')
+    .then(r => { if(!r.ok) throw new Error(''+r.status); return r.json(); })
+    .then(data => { waterloggingReports = data || []; renderWaterloggingMarkers(); })
+    .catch(err => {
+      console.warn('加载积水上报失败:', err);
+      // 本地预览 mock（部署后不触发）
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        waterloggingReports = [
+          { id:1, number:1, lat:31.1865, lng:121.4887, severity:'heavy', description:'世博中心门口积水严重，到膝盖', time:'刚刚', reporter:'参会者A', photoUrl:null },
+          { id:2, number:2, lat:31.1845, lng:121.4853, severity:'medium', description:'世博展览馆路口积水，公交难行', time:'5分钟前', reporter:'参会者B', photoUrl:null },
+          { id:3, number:3, lat:31.171, lng:121.453, severity:'light', description:'西岸会展中心少量积水', time:'10分钟前', reporter:'参会者C', photoUrl:null }
+        ];
+        renderWaterloggingMarkers();
+      }
+    });
+}
+
+function renderWaterloggingMarkers() {
+  if (!leafletMap) return;
+  waterloggingMarkers.forEach(m => leafletMap.removeLayer(m));
+  waterloggingMarkers = [];
+  waterloggingReports.forEach(rep => {
+    if (!rep.lat || !rep.lng) return;
+    const sev = rep.severity || 'light';
+    const icon = L.divIcon({
+      className: 'custom-pin',
+      html: '<div class="waterlogging-pin ' + sev + '"><span class="waterlogging-pin-text">!</span></div>',
+      iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -30]
+    });
+    const marker = L.marker([rep.lat, rep.lng], { icon }).addTo(leafletMap);
+    const sevText = { heavy: '重度积水', medium: '中度积水', light: '轻度积水' }[sev] || '积水';
+    const photoHtml = rep.photoUrl ? '<img src="' + rep.photoUrl + '" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:6px">' : '';
+    marker.bindPopup(
+      '<div style="min-width:220px"><div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">' + sevText + '</div>'
+      + '<div style="font-size:12px;color:#8b95a8;margin-bottom:6px">' + (rep.time || '') + '</div>'
+      + (rep.description ? '<div style="font-size:13px;color:#e8eef7;margin-bottom:6px">' + escapeHtml(rep.description) + '</div>' : '')
+      + photoHtml + '</div>',
+      { maxWidth: 280 }
+    );
+    waterloggingMarkers.push(marker);
+  });
+}
+
+function openReportModal() {
+  document.getElementById('reportModal').classList.add('active');
+  if (leafletMap) {
+    leafletMap.on('click', onMapClickForReport);
+    document.getElementById('locationResult').textContent = '在地图上点击选择位置';
+  }
+}
+
+function onMapClickForReport(e) {
+  reportLocation = { lat: e.latlng.lat, lng: e.latlng.lng };
+  document.getElementById('locationResult').textContent = '已选位置: ' + reportLocation.lat.toFixed(4) + ', ' + reportLocation.lng.toFixed(4);
+}
+
+function closeReportModal() {
+  document.getElementById('reportModal').classList.remove('active');
+  if (leafletMap) leafletMap.off('click', onMapClickForReport);
+  reportSeverity = null; reportLocation = null; reportPhotoData = null;
+  document.querySelectorAll('.severity-option').forEach(o => o.classList.remove('active'));
+  document.getElementById('reportDesc').value = '';
+  document.getElementById('reportPhoto').value = '';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('locationResult').textContent = '或直接在地图上点击选择位置';
+}
+
+function selectSeverity(sev) {
+  reportSeverity = sev;
+  document.querySelectorAll('.severity-option').forEach(o => o.classList.toggle('active', o.dataset.severity === sev));
+}
+
+function useMyLocation() {
+  if (!navigator.geolocation) { alert('您的浏览器不支持定位'); return; }
+  document.getElementById('locationText').textContent = '定位中…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    reportLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    document.getElementById('locationText').textContent = '使用我的定位';
+    document.getElementById('locationResult').textContent = '已定位: ' + reportLocation.lat.toFixed(4) + ', ' + reportLocation.lng.toFixed(4);
+    if (leafletMap) leafletMap.setView([reportLocation.lat, reportLocation.lng], 15);
+  }, () => {
+    document.getElementById('locationText').textContent = '使用我的定位';
+    alert('定位失败，请在地图上点选位置');
+  });
+}
+
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 800, maxH = 800;
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      if (h > maxH) { w = w * maxH / h; h = maxH; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      reportPhotoData = canvas.toDataURL('image/jpeg', 0.6);
+      const preview = document.getElementById('photoPreview');
+      preview.src = reportPhotoData;
+      preview.style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function submitReport() {
+  if (!reportLocation) { alert('请选择积水位置（定位或地图点选）'); return; }
+  if (!reportSeverity) { alert('请选择严重程度'); return; }
+  const btn = document.getElementById('reportSubmitBtn');
+  btn.disabled = true; btn.textContent = '提交中…';
+  const body = {
+    lat: reportLocation.lat, lng: reportLocation.lng,
+    severity: reportSeverity,
+    description: document.getElementById('reportDesc').value.trim()
+  };
+  if (reportPhotoData) body.photoBase64 = reportPhotoData;
+  fetch('/api/waterlogging', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      closeReportModal();
+      loadWaterloggingReports();
+      btn.disabled = false; btn.textContent = '提交上报';
+      showToast('上报成功！感谢你的贡献');
+    })
+    .catch(err => {
+      btn.disabled = false; btn.textContent = '提交上报';
+      alert('上报失败: ' + err.message);
+    });
+}
+
+function showToast(msg) {
+  const toast = document.createElement('div');
+  toast.textContent = msg;
+  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(74,222,128,0.95);color:#fff;padding:12px 24px;border-radius:999px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .4s'; }, 2000);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+// ===== 暴雨应急：议程应急联动 =====
+function getNextFavoriteEvent() {
+  if (favorites.size === 0) return null;
+  const now = new Date();
+  const favEvents = events.filter(e => favorites.has(e.id)).map(e => {
+    const dateStr = e.date.replace('月', '/').replace('日', '');
+    const parts = dateStr.split('/');
+    const [hh, mm] = (e.time_start || '0:0').split(':').map(Number);
+    const evDate = new Date(2026, parts[0] - 1, parts[1], hh, mm);
+    return { event: e, date: evDate, minutesUntil: Math.round((evDate - now) / 60000) };
+  }).filter(x => x.minutesUntil > -60)
+    .sort((a, b) => a.minutesUntil - b.minutesUntil);
+  return favEvents[0] || null;
+}
+
+function renderAgendaAlert() {
+  const card = document.getElementById('agendaAlertCard');
+  if (!card) return;
+  const next = getNextFavoriteEvent();
+  if (!next) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const ev = next.event;
+  document.getElementById('agendaAlertEvent').textContent = ev.name_cn;
+  let timeText = ev.date + ' ' + ev.time_start + ' - ' + ev.time_end + ' · ' + (ev.venue || '');
+  if (next.minutesUntil > 0) {
+    const h = Math.floor(next.minutesUntil / 60);
+    const m = next.minutesUntil % 60;
+    timeText += ' · 还有' + (h > 0 ? h + '小时' : '') + (m > 0 ? m + '分钟' : '') + '开始';
+  } else {
+    timeText += ' · 进行中';
+  }
+  document.getElementById('agendaAlertTime').textContent = timeText;
+  document.getElementById('agendaAlertSuggestion').textContent = calculateDepartureSuggestion(next, currentWarningLevel);
+  card.classList.toggle('warn', currentWarningLevel === 'ORANGE' || currentWarningLevel === 'RED');
+}
+
+function calculateDepartureSuggestion(next, warningLevel) {
+  if (next.minutesUntil <= 0) return '该论坛已开始，可前往' + (next.event.venue || '场馆');
+  if (!warningLevel || warningLevel === 'BLUE') return '当前无暴雨预警，建议提前 15 分钟出发前往' + (next.event.venue || '场馆');
+  if (warningLevel === 'YELLOW') return '暴雨黄色预警，路面湿滑，建议提前 30 分钟出发，注意步行安全';
+  if (warningLevel === 'ORANGE') return '暴雨橙色预警，建议提前 45 分钟出发，避开低洼路段，优先选择地铁';
+  if (warningLevel === 'RED') return '暴雨红色预警，建议推迟前往或改用地铁出行，避免涉水路段';
+  return '建议提前出发';
+}
+
+function loadShelters() {
+  fetch('/public/shelters.json')
+    .then(r => r.json())
+    .then(data => {
+      if (!leafletMap || !data) return;
+      data.forEach(s => {
+        const icon = L.divIcon({
+          className: 'custom-pin',
+          html: '<div style="width:22px;height:22px;border-radius:50%;background:#4ade80;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;color:#062">避</div>',
+          iconSize: [22, 22], iconAnchor: [11, 11]
+        });
+        L.marker([s.lat, s.lng], { icon }).addTo(leafletMap)
+          .bindPopup('<div style="min-width:160px"><div style="font-size:13px;font-weight:700;color:#4ade80">' + escapeHtml(s.name) + '</div><div style="font-size:11px;color:#8b95a8;margin-top:4px">' + escapeHtml(s.address || s.type || '') + '</div></div>');
+      });
+    })
+    .catch(err => { console.warn('加载避雨点失败:', err); });
+}
+
+// ===== INIT =====
+function init() {
+  // 暴雨应急：启动预警轮询 + 积水加载 + 议程联动
+  startWarningPolling();
+  loadWaterloggingReports();
+  renderAgendaAlert();
+  setInterval(renderAgendaAlert, 60000);
+  // Nav buttons
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+
+  // Date filters
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentDateFilter = pill.dataset.date;
+      if(currentView === 'timeline') renderTimeline();
+    });
+  });
+
+  // Search
+  let searchTimer;
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery = e.target.value.trim();
+      if(currentView === 'timeline') renderTimeline();
+      else switchView('timeline');
+    }, 250);
+  });
+
+  // Modal close
+  document.getElementById('eventModal').addEventListener('click', (e) => {
+    if(e.target.id === 'eventModal') closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeModal();
+  });
+
+  // Initial render
+  updateTrackFilters();
+  renderTimeline();
+  updateFavBadge();
+}
+
+init();
+</script>
+</body>
+</html>

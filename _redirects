@@ -1,0 +1,3 @@
+/api/waterlogging    /.netlify/functions/api       200
+/api/waterlogging/*  /.netlify/functions/api       200
+/api/weather         /.netlify/functions/weather   200
