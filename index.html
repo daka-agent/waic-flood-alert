@@ -6,8 +6,8 @@
 <title>WAIC 暴雨应急护航 · Rain Alert for WAIC 2026</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23060912' stroke='%2300f0ff' stroke-width='3'/%3E%3Cpath d='M35 50 Q50 20 65 50 T95 50' fill='none' stroke='%2300f0ff' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M25 60 Q45 35 65 60 T95 60' fill='none' stroke='%23c084fc' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='68' r='6' fill='%23f472b6'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=efbfef5eb0d0b3f17ad09f80ec041f12"></script>
+<script type="text/javascript">window._AMapSecurityConfig={securityJsCode:'d08dbfa515b78c257a9feff69d9396cd'}</script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script defer src="https://events.vercount.one/js"></script>
 <style>
@@ -79,11 +79,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-deep);color:va
 
 /* Map */
 #mapView{height:calc(100vh - 200px);min-height:450px;border-radius:16px;overflow:hidden;z-index:1}
-.leaflet-popup-content-wrapper{background:rgba(10,14,26,0.95)!important;backdrop-filter:blur(20px);border:1px solid rgba(0,240,255,0.2)!important;border-radius:12px!important;color:#e8eef7!important;box-shadow:0 8px 32px rgba(0,0,0,0.4)!important}
-.leaflet-popup-tip{background:rgba(10,14,26,0.95)!important;border:1px solid rgba(0,240,255,0.2)!important}
-.leaflet-container{background:#0a0e1a!important}
-.leaflet-tile{opacity:0;transition:opacity .25s ease-in;filter:invert(1) hue-rotate(180deg) brightness(0.55) contrast(1.1) saturate(0.6)!important}
-.leaflet-tile-loaded{opacity:1}
+/* AMap InfoWindow 暗黑样式 */
+.amap-info-content{background:rgba(10,14,26,0.95)!important;backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;border:1px solid rgba(0,240,255,0.2)!important;border-radius:12px!important;color:#e8eef7!important;box-shadow:0 8px 32px rgba(0,0,0,0.4)!important;padding:12px 16px!important;font-family:'Inter',system-ui,sans-serif!important;font-size:13px!important}
+.amap-info-sharp{display:none!important}
+.amap-info-close{color:rgba(0,240,255,0.6)!important;font-size:16px!important;right:8px!important;top:8px!important}
+.amap-logo,.amap-copyright{opacity:0.4!important;font-size:10px!important}
 .custom-pin{background:transparent;border:none}
 .pin-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.3);transition:all .3s}
 .pin-icon:hover{transform:rotate(-45deg) scale(1.2);z-index:1000}
@@ -407,6 +407,26 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-deep);color:va
 </div>
 
 <!-- 积水上报模态框 -->
+<!-- 隐私政策弹窗 -->
+<div class="modal-overlay" id="privacyModal">
+  <div class="modal-content glass p-6" style="max-width:480px">
+    <h3 class="text-lg font-bold mb-3" style="color:var(--accent-cyan)">隐私政策 · WAIC 暴雨应急护航</h3>
+    <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;max-height:50vh;overflow-y:auto">
+      <p><strong style="color:#e8eef7">我们收集什么数据：</strong></p>
+      <p>1. <strong>位置信息</strong>：仅在上报积水时由您主动提供（GPS定位或手动选点），用于标记积水位置。我们不会持续追踪您的行踪。</p>
+      <p>2. <strong>现场照片</strong>：仅在上报积水时由您主动上传，用于展示积水情况。照片不会进行人脸识别或任何生物特征处理。</p>
+      <p>3. <strong>议程收藏</strong>：保存在您的浏览器本地，不会上传到服务器。</p>
+      <p><strong style="color:#e8eef7">数据存储：</strong></p>
+      <p>积水上报数据存储在公开的 GitHub Issues 中，任何人可查看。数据将在事件结束后 30 天删除。</p>
+      <p><strong style="color:#e8eef7">预警数据：</strong></p>
+      <p>预警信息源自各级气象台站官方发布，通过和风天气 API 获取并原样展示，我们不做任何天气预报或预警发布。</p>
+      <p><strong style="color:#e8eef7">您的权利：</strong></p>
+      <p>您可以随时撤回同意、删除您提交的上报数据，或关闭浏览器通知权限。</p>
+    </div>
+    <button class="report-submit" style="background:linear-gradient(135deg,#00f0ff,#a855f7);margin-top:16px" onclick="agreePrivacy()">同意并继续</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="reportModal">
   <div class="modal-content glass p-6">
     <div class="flex items-center justify-between mb-4">
@@ -436,6 +456,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-deep);color:va
     <div class="report-field">
       <label class="report-label">现场照片（选填）</label>
       <input type="file" accept="image/*" capture="environment" id="reportPhoto" onchange="previewPhoto(this)" style="font-size:13px;color:var(--text-secondary);width:100%">
+      <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;opacity:0.7">照片仅用于展示积水情况，不会进行人脸识别或其他生物特征处理</div>
       <img id="photoPreview" class="report-photo-preview" style="display:none">
     </div>
     <button class="report-submit" id="reportSubmitBtn" onclick="submitReport()">提交上报</button>
@@ -463,7 +484,7 @@ let currentDateFilter = 'all';
 let activeTracks = new Set();
 let searchQuery = '';
 let favorites = new Set(JSON.parse(localStorage.getItem('waic_favs') || '[]'));
-let leafletMap = null;
+let amapIns = null;
 let mapInitialized = false;
 
 // ===== UTILS =====
@@ -571,7 +592,7 @@ function renderMap() {
       });
     });
   } else {
-    if(leafletMap) leafletMap.invalidateSize();
+    if(amapIns) {/* AMap auto-resizes */}
   }
 }
 
@@ -583,27 +604,13 @@ function initMap() {
     return;
   }
 
-  leafletMap = L.map('mapView', {
-    zoomControl: true, attributionControl: false, scrollWheelZoom: true,
-    fadeAnimation: true, zoomAnimation: true, markerZoomAnimation: true
-  }).setView([31.19, 121.50], 12);
-
-  // Primary base layer: Amap (Gaode) road map - more reliable in mainland China
-  const tileLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    maxZoom: 18, subdomains: '1234', keepBuffer: 2, updateWhenIdle: true,
-    errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-  }).addTo(leafletMap);
-
-  // If Amap tile fails, try OpenStreetMap as a last resort
-  tileLayer.on('tileerror', function(ev) {
-    const tile = ev.tile;
-    if(!tile || tile._fallbackApplied) return;
-    tile._fallbackApplied = true;
-    const match = tile.src.match(/x=(\d+)&y=(\d+)&z=(\d+)/);
-    if(match) {
-      const [, x, y, z] = match;
-      tile.src = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
-    }
+  amapIns = new AMap.Map('mapView', {
+    zoom: 12,
+    center: [121.50, 31.19],
+    mapStyle: 'amap://styles/dark',
+    viewMode: '2D',
+    zooms: [3, 18],
+    resizeEnable: true
   });
   mapInitialized = true;
 
@@ -614,23 +621,16 @@ function initMap() {
       venueGroups[e.venue].push(e);
     });
 
-    const allBounds = [];
+    const allMarkers = [];
 
     Object.entries(venueGroups).forEach(([venueName, evts]) => {
       const v = venues[venueName];
       if(!v) return;
-      allBounds.push([v.lat, v.lng]);
 
       const size = Math.min(48, 24 + evts.length * 0.3);
-      // Short venue name for label
       const shortName = venueName.length > 6 ? venueName.slice(0,5)+'…' : venueName;
-      const icon = L.divIcon({
-        className:'custom-pin',
-        html:`<div style="position:relative"><div class="pin-icon" style="background:${v.color};width:${size}px;height:${size}px"><span class="pin-text">${evts.length}</span></div><div class="venue-label">${shortName}</div></div>`,
-        iconSize:[size,size], iconAnchor:[size/2,size], popupAnchor:[0,-size]
-      });
+      const content = `<div style="position:relative"><div class="pin-icon" style="background:${v.color};width:${size}px;height:${size}px"><span class="pin-text">${evts.length}</span></div><div class="venue-label">${shortName}</div></div>`;
 
-      const marker = L.marker([v.lat,v.lng],{icon}).addTo(leafletMap);
       const eventList = evts.sort((a,b)=>timeToMinutes(a.time_start)-timeToMinutes(b.time_start)).slice(0,8).map(e =>
         `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" onclick="showEventDetail(${e.id})">
           <div style="font-size:12px;color:${getTrackColor(e.track)};font-weight:600">${e.time_start} - ${e.time_end}</div>
@@ -639,57 +639,58 @@ function initMap() {
       ).join('');
       const moreText = evts.length > 8 ? `<div style="text-align:center;padding:6px;color:#8b95a8;font-size:12px">还有 ${evts.length-8} 场活动...</div>` : '';
 
-      marker.bindPopup(`
-        <div style="min-width:260px;max-width:300px">
+      const marker = new AMap.Marker({
+        position: [v.lng, v.lat],
+        content: content,
+        offset: new AMap.Pixel(-size/2, -size),
+        map: amapIns
+      });
+      allMarkers.push(marker);
+
+      const infoContent = `<div style="min-width:260px;max-width:300px">
           <div style="font-size:16px;font-weight:700;color:${v.color};margin-bottom:2px">${venueName}</div>
           <div style="font-size:11px;color:#8b95a8;margin-bottom:8px">${escapeHtml(v.address)}</div>
           <div style="font-size:12px;color:#8b95a8;margin-bottom:6px">共 ${evts.length} 场活动</div>
           ${eventList}${moreText}
-        </div>
-      `, {maxWidth:320});
+        </div>`;
+      const infoWindow = new AMap.InfoWindow({ content: infoContent, offset: new AMap.Pixel(0, -size) });
+      marker.on('click', () => infoWindow.open(amapIns, marker.getPosition()));
     });
 
     // Add other venue markers
     Object.entries(otherVenueCoords).forEach(([id, coord]) => {
       const event = events.find(e => e.id === parseInt(id));
       if(!event) return;
-      allBounds.push([coord.lat, coord.lng]);
+      allMarkers.push(new AMap.Marker({ position: [coord.lng, coord.lat], map: amapIns }));
 
       const color = getTrackColor(event.track);
       const shortName = coord.name.length > 6 ? coord.name.slice(0,5)+'…' : coord.name;
-      const icon = L.divIcon({
-        className:'custom-pin',
-        html:`<div style="position:relative"><div class="pin-icon" style="background:${color};width:28px;height:28px"><span class="pin-text" style="font-size:10px">1</span></div><div class="venue-label">${shortName}</div></div>`,
-        iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-28]
+      const content = `<div style="position:relative"><div class="pin-icon" style="background:${color};width:28px;height:28px"><span class="pin-text" style="font-size:10px">1</span></div><div class="venue-label">${shortName}</div></div>`;
+
+      const marker = new AMap.Marker({
+        position: [coord.lng, coord.lat],
+        content: content,
+        offset: new AMap.Pixel(-14, -28),
+        map: amapIns
       });
 
-      const marker = L.marker([coord.lat,coord.lng],{icon}).addTo(leafletMap);
-      marker.bindPopup(`
-        <div style="min-width:240px">
+      const infoContent = `<div style="min-width:240px">
           <div style="font-size:15px;font-weight:700;color:${color};margin-bottom:2px">${escapeHtml(coord.name)}</div>
           <div style="font-size:11px;color:#8b95a8;margin-bottom:8px">${escapeHtml(event.location_cn)}</div>
           <div style="padding:6px 0;cursor:pointer" onclick="showEventDetail(${event.id})">
             <div style="font-size:12px;color:${color};font-weight:600">${event.time_start} - ${event.time_end}</div>
             <div style="font-size:13px;color:#e8eef7;margin-top:2px">${escapeHtml(event.name_cn)}</div>
           </div>
-        </div>
-      `, {maxWidth:280});
+        </div>`;
+      const infoWindow = new AMap.InfoWindow({ content: infoContent, offset: new AMap.Pixel(0, -28) });
+      marker.on('click', () => infoWindow.open(amapIns, marker.getPosition()));
     });
 
-    // Fit bounds to show all markers
-    if(allBounds.length > 0) {
-      leafletMap.fitBounds(allBounds, {padding:[50,50], maxZoom:14});
+    // Fit view to show all markers
+    if(allMarkers.length > 0) {
+      amapIns.setFitView(allMarkers, false, [50,50,50,50], 14);
     }
 
-    // ResizeObserver to catch container size changes (mobile address bar, orientation change, etc.)
-    if(mapResizeObserver) mapResizeObserver.disconnect();
-    mapResizeObserver = new ResizeObserver(() => {
-      if(leafletMap) leafletMap.invalidateSize();
-    });
-    mapResizeObserver.observe(mapContainer);
-
-  // One final invalidateSize after layout settles
-  setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 300);
   // 暴雨应急：地图初始化后加载避雨点
   loadShelters();
 }
@@ -835,23 +836,19 @@ function closeModal() {
 function showOnMap(lat,lng) {
   closeModal();
   switchView('map');
-  // Wait for view transition, then invalidate size and fly to location
   setTimeout(() => {
-    if(leafletMap) {
-      leafletMap.invalidateSize();
+    if(amapIns) {
       setTimeout(() => {
-        leafletMap.flyTo([lat,lng], 15, {duration:0.8});
+        amapIns.setZoomAndCenter(15, [lng, lat], false, 800);
       }, 300);
     } else {
-      // Map not yet initialized, wait longer
       setTimeout(() => {
-        if(leafletMap) {
-          leafletMap.invalidateSize();
-          leafletMap.flyTo([lat,lng], 15, {duration:0.8});
+        if(amapIns) {
+          amapIns.setZoomAndCenter(15, [lng, lat], false, 800);
         }
-      }, 500);
+      }, 800);
     }
-  }, 400);
+  }, 200);
 }
 
 // ===== FAVORITES =====
@@ -912,7 +909,7 @@ function switchView(viewName) {
     targetSection.classList.add('active');
     renderMap();
     // Extra invalidateSize after layout settles
-    setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500);
+    // AMap auto-resizes, no manual invalidateSize needed
   } else {
     targetSection.classList.add('active');
   }
@@ -1012,7 +1009,8 @@ function normalizeWarnings(data) {
     level: (w.level || (w.color && w.color.code) || '').toUpperCase(),
     text: w.text || w.description || '',
     pubTime: w.pubTime || w.issuedTime || '',
-    typeName: w.typeName || (w.eventType && w.eventType.name) || ''
+    typeName: w.typeName || (w.eventType && w.eventType.name) || '',
+    sender: w.sender || (w.source && w.source.name) || ''
   }));
 }
 
@@ -1022,7 +1020,7 @@ function renderWarningBanner(warnings) {
   if (!warnings || warnings.length === 0) {
     banner.className = 'warning-banner safe';
     currentWarningLevel = null;
-    banner.innerHTML = '<span class="warning-banner-text">当前上海无暴雨预警 · 出行安全</span>';
+    banner.innerHTML = '<span class="warning-banner-text">当前上海无暴雨预警 · 出行安全</span><div style="font-size:11px;opacity:0.7;margin-top:2px">预警数据源自各级气象台站官方发布</div>';
     banner.onclick = null;
     return;
   }
@@ -1032,8 +1030,14 @@ function renderWarningBanner(warnings) {
   banner.className = 'warning-banner ' + top.level.toLowerCase();
   const levelText = { RED:'红色', ORANGE:'橙色', YELLOW:'黄色', BLUE:'蓝色' }[top.level] || '';
   const typeName = top.typeName || '暴雨';
+  // 来源标注（合规传播气象预警）
+  let sourceLine = '';
+  if (top.sender) {
+    const pubTimeStr = top.pubTime ? new Date(top.pubTime).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    sourceLine = '<div style="font-size:11px;opacity:0.7;margin-top:2px">来源：' + escapeHtml(top.sender) + (pubTimeStr ? ' · 发布时间：' + pubTimeStr : '') + '</div>';
+  }
   banner.innerHTML = '<div><span class="dot"></span><span class="warning-banner-text">上海' + typeName + levelText + '预警</span></div>'
-    + '<div class="warning-banner-detail">' + (top.text || top.title) + '</div>';
+    + '<div class="warning-banner-detail">' + (top.text || top.title) + '</div>' + sourceLine;
   banner.onclick = () => { if(currentView !== 'map') switchView('map'); };
 }
 
@@ -1118,47 +1122,63 @@ function loadWaterloggingReports() {
 }
 
 function renderWaterloggingMarkers() {
-  if (!leafletMap) return;
-  waterloggingMarkers.forEach(m => leafletMap.removeLayer(m));
+  if (!amapIns) return;
+  waterloggingMarkers.forEach(m => m.setMap(null));
   waterloggingMarkers = [];
   waterloggingReports.forEach(rep => {
     if (!rep.lat || !rep.lng) return;
     const sev = rep.severity || 'light';
-    const icon = L.divIcon({
-      className: 'custom-pin',
-      html: '<div class="waterlogging-pin ' + sev + '"><span class="waterlogging-pin-text">!</span></div>',
-      iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -30]
+    const content = '<div class="waterlogging-pin ' + sev + '"><span class="waterlogging-pin-text">!</span></div>';
+    const marker = new AMap.Marker({
+      position: [rep.lng, rep.lat],
+      content: content,
+      offset: new AMap.Pixel(-15, -30),
+      map: amapIns
     });
-    const marker = L.marker([rep.lat, rep.lng], { icon }).addTo(leafletMap);
     const sevText = { heavy: '重度积水', medium: '中度积水', light: '轻度积水' }[sev] || '积水';
     const photoHtml = rep.photoUrl ? '<img src="' + rep.photoUrl + '" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:6px">' : '';
-    marker.bindPopup(
-      '<div style="min-width:220px"><div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">' + sevText + '</div>'
+    const infoContent = '<div style="min-width:220px"><div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">' + sevText + '</div>'
       + '<div style="font-size:12px;color:#8b95a8;margin-bottom:6px">' + (rep.time || '') + '</div>'
       + (rep.description ? '<div style="font-size:13px;color:#e8eef7;margin-bottom:6px">' + escapeHtml(rep.description) + '</div>' : '')
-      + photoHtml + '</div>',
-      { maxWidth: 280 }
-    );
+      + photoHtml + '</div>';
+    const infoWindow = new AMap.InfoWindow({ content: infoContent, offset: new AMap.Pixel(0, -30) });
+    marker.on('click', () => infoWindow.open(amapIns, marker.getPosition()));
     waterloggingMarkers.push(marker);
   });
 }
 
 function openReportModal() {
+  // 隐私政策检查：首次使用上报功能需先同意
+  if (!localStorage.getItem('waic_privacy_agreed')) {
+    document.getElementById('privacyModal').classList.add('active');
+    return;
+  }
   document.getElementById('reportModal').classList.add('active');
-  if (leafletMap) {
-    leafletMap.on('click', onMapClickForReport);
+  if (amapIns) {
+    amapIns.on('click', onMapClickForReport);
+    document.getElementById('locationResult').textContent = '在地图上点击选择位置';
+  }
+}
+
+function agreePrivacy() {
+  localStorage.setItem('waic_privacy_agreed', '1');
+  document.getElementById('privacyModal').classList.remove('active');
+  // 然后打开上报模态框
+  document.getElementById('reportModal').classList.add('active');
+  if (amapIns) {
+    amapIns.on('click', onMapClickForReport);
     document.getElementById('locationResult').textContent = '在地图上点击选择位置';
   }
 }
 
 function onMapClickForReport(e) {
-  reportLocation = { lat: e.latlng.lat, lng: e.latlng.lng };
+  reportLocation = { lat: e.lnglat.lat, lng: e.lnglat.lng };
   document.getElementById('locationResult').textContent = '已选位置: ' + reportLocation.lat.toFixed(4) + ', ' + reportLocation.lng.toFixed(4);
 }
 
 function closeReportModal() {
   document.getElementById('reportModal').classList.remove('active');
-  if (leafletMap) leafletMap.off('click', onMapClickForReport);
+  if (amapIns) amapIns.off('click', onMapClickForReport);
   reportSeverity = null; reportLocation = null; reportPhotoData = null;
   document.querySelectorAll('.severity-option').forEach(o => o.classList.remove('active'));
   document.getElementById('reportDesc').value = '';
@@ -1174,12 +1194,14 @@ function selectSeverity(sev) {
 
 function useMyLocation() {
   if (!navigator.geolocation) { alert('您的浏览器不支持定位'); return; }
+  // GPS 位置单独同意（个人信息保护法要求）
+  if (!confirm('是否允许应用获取您当前位置用于积水上报？\n位置信息仅用于本次上报，不会持续追踪您的行踪。')) return;
   document.getElementById('locationText').textContent = '定位中…';
   navigator.geolocation.getCurrentPosition(pos => {
     reportLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     document.getElementById('locationText').textContent = '使用我的定位';
     document.getElementById('locationResult').textContent = '已定位: ' + reportLocation.lat.toFixed(4) + ', ' + reportLocation.lng.toFixed(4);
-    if (leafletMap) leafletMap.setView([reportLocation.lat, reportLocation.lng], 15);
+    if (amapIns) amapIns.setZoomAndCenter(15, [reportLocation.lng, reportLocation.lat]);
   }, () => {
     document.getElementById('locationText').textContent = '使用我的定位';
     alert('定位失败，请在地图上点选位置');
@@ -1298,15 +1320,18 @@ function loadShelters() {
   fetch('/public/shelters.json')
     .then(r => r.json())
     .then(data => {
-      if (!leafletMap || !data) return;
+      if (!amapIns || !data) return;
       data.forEach(s => {
-        const icon = L.divIcon({
-          className: 'custom-pin',
-          html: '<div style="width:22px;height:22px;border-radius:50%;background:#4ade80;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;color:#062">避</div>',
-          iconSize: [22, 22], iconAnchor: [11, 11]
+        const content = '<div style="width:22px;height:22px;border-radius:50%;background:#4ade80;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;color:#062">避</div>';
+        const marker = new AMap.Marker({
+          position: [s.lng, s.lat],
+          content: content,
+          offset: new AMap.Pixel(-11, -11),
+          map: amapIns
         });
-        L.marker([s.lat, s.lng], { icon }).addTo(leafletMap)
-          .bindPopup('<div style="min-width:160px"><div style="font-size:13px;font-weight:700;color:#4ade80">' + escapeHtml(s.name) + '</div><div style="font-size:11px;color:#8b95a8;margin-top:4px">' + escapeHtml(s.address || s.type || '') + '</div></div>');
+        const infoContent = '<div style="min-width:160px"><div style="font-size:13px;font-weight:700;color:#4ade80">' + escapeHtml(s.name) + '</div><div style="font-size:11px;color:#8b95a8;margin-top:4px">' + escapeHtml(s.address || s.type || '') + '</div></div>';
+        const infoWindow = new AMap.InfoWindow({ content: infoContent, offset: new AMap.Pixel(0, -11) });
+        marker.on('click', () => infoWindow.open(amapIns, marker.getPosition()));
       });
     })
     .catch(err => { console.warn('加载避雨点失败:', err); });
