@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WAIC 暴雨应急护航 · Rain Alert for WAIC 2026</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23060912' stroke='%2300f0ff' stroke-width='3'/%3E%3Cpath d='M35 50 Q50 20 65 50 T95 50' fill='none' stroke='%2300f0ff' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M25 60 Q45 35 65 60 T95 60' fill='none' stroke='%23c084fc' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='72' cy='68' r='6' fill='%23f472b6'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1354,7 +1355,7 @@ function init() {
 
   // Initial render
   updateTrackFilters();
-  renderTimeline();
+  switchView('map');
   updateFavBadge();
 }
 
